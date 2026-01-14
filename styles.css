@@ -410,7 +410,7 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   flex: 0 0 auto;
 }
 .checkbox-inline span { white-space: nowrap; }
-}
+
 /* Owner list and actions */
 .dashboard-header .small { margin-top: 2px; }
 .owner-list {
