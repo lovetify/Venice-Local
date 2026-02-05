@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "web": "python3 -m http.server 4173"
   },
   "author": "FBLA Venice Local",
   "license": "MIT",
@@ -37,4 +38,3 @@
     }
   }
 }
-

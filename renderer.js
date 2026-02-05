@@ -1,7 +1,7 @@
 // Renderer process logic for Venice Local
 // Now uses Supabase for auth and business storage so data syncs across devices.
 
-const { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } = require('./supabaseClient');
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient.js';
 
 // --- Supabase configuration and asset references (updated) ---
 const assetUrl = (file) => new URL(`./assets/${file}`, window.location.href).href;
