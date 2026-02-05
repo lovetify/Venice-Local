@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Base HTML scaffold with manifest + Google font for Space Grotesk -->
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,6 +17,7 @@
   <div id="auth-screen" class="screen">
     <div class="auth-container">
       <div class="auth-intro">
+        <!-- Left column highlights what the app does -->
         <div class="auth-logo" aria-label="Venice Local">
           <img class="veniceLogo" alt="Venice Local logo">
           <span class="sr-only">Venice Local</span>
@@ -30,6 +32,7 @@
       </div>
       <div class="auth-forms">
         <div class="card" id="auth-choice-card">
+          <!-- Simple chooser that leads to either sign up or sign in; guest is allowed too -->
           <h2>Get started with Venice Local!</h2>
           <p class="muted">You can browse as a guest or create an account/sign in to save favorites and post reviews.</p>
           <div class="choice-buttons">
@@ -39,6 +42,7 @@
           </div>
         </div>
         <div class="card hidden" id="signup-card">
+          <!-- Signup collects a few extra fields to keep the demo human-friendly -->
           <h2>Create Account</h2>
           <form id="signup-form">
             <label>Display Name<input type="text" id="signup-name" required></label>
@@ -66,6 +70,7 @@
           </form>
         </div>
         <div class="card hidden" id="signin-card">
+          <!-- Sign-in has a tiny math check to discourage bots -->
           <h2>Sign In</h2>
           <form id="signin-form">
             <label>Email<input type="email" id="signin-email" required></label>
@@ -87,10 +92,12 @@
     <header class="topbar">
       <div class="topbar-left">
         <div class="brand" aria-label="Venice Local">
+          <!-- Brand lockup reused in top bar -->
           <img class="veniceLogo" alt="Venice Local logo">
           <span class="sr-only">Venice Local</span>
         </div>
         <nav class="nav-actions">
+          <!-- Nav buttons switch visible section via data-target -->
           <button class="nav-btn" data-target="list">All Businesses</button>
           <button class="nav-btn" data-target="favorites">My Favorites</button>
           <button class="nav-btn owner-only" data-target="owner">Owner Dashboard</button>
@@ -109,8 +116,10 @@
     <main class="content">
       <!-- Browse all businesses -->
       <section id="list-section" class="view-section">
+        <!-- Filters + error state live up top -->
         <div class="filters card">
           <div class="filter-group">
+            <!-- Search + dropdowns power client-side filtering -->
             <label>Search
               <input type="text" id="search-input" placeholder="Search by name or keyword">
             </label>
@@ -141,6 +150,7 @@
 
       <!-- Saved favorites -->
       <section id="favorites-section" class="view-section hidden">
+        <!-- Filled only after a user saves businesses -->
         <div class="section-header">
           <h2>My Favorites</h2>
           <p class="muted">Saved local spots you love.</p>
@@ -151,6 +161,7 @@
 
       <!-- Owner add/edit form -->
       <section id="add-section" class="view-section hidden">
+        <!-- Owners can add a business; file inputs are optional but supported -->
         <div class="card form-card">
           <h2>Add My Business</h2>
           <form id="add-business-form">
@@ -185,6 +196,7 @@
 
       <!-- Owner dashboard metrics -->
       <section id="owner-section" class="view-section hidden">
+        <!-- Simple stat cards + editable list scoped to owner -->
         <div class="section-header">
           <h2>Owner Dashboard</h2>
           <p class="muted">Track performance and update your businesses.</p>
@@ -252,10 +264,11 @@
   <div id="detail-modal" class="modal hidden">
     <div class="modal-content">
       <button class="close-btn" id="close-detail">×</button>
-      <div id="detail-body"></div>
+      <div id="detail-body"></div> <!-- Populated dynamically from renderer.js -->
     </div>
   </div>
 
+  <!-- All interactive behavior is in renderer.js -->
   <script src="renderer.js"></script>
 </body>
 </html>

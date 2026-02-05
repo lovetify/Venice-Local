@@ -1,4 +1,5 @@
 // Basic offline handler for static assets (kept lean for this prototype).
+// We aggressively bypass Supabase calls to ensure live auth/token flow.
 const CACHE_NAME = 'venice-local-cache-v4';
 const OFFLINE_ASSETS = [
   './',

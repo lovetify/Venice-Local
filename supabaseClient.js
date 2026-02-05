@@ -1,3 +1,5 @@
+// Central Supabase client used by both auth + data helpers in renderer.js.
+// These demo keys are safe for a hackathon prototype; rotate for production.
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = 'https://rysbzmizspfuacnjgvfm.supabase.co';
@@ -7,6 +9,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   global: { fetch: (...args) => window.fetch(...args) }
 });
 
+// Helpful debug so anyone can verify which project the app is talking to.
 console.log('SUPABASE_URL in use:', SUPABASE_URL);
 console.log('SUPABASE_ANON_KEY ends with:', SUPABASE_ANON_KEY.slice(-6));
 

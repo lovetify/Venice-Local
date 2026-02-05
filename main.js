@@ -13,6 +13,7 @@ async function clearAppData() {
   await fs.rm(serviceWorkerPath, { recursive: true, force: true }).catch(() => {});
 
   const ses = session.defaultSession;
+  // Clear both cache + persistent storage to avoid stale auth sessions.
   await ses.clearCache();
   await ses.clearStorageData({
     storages: ['serviceworkers', 'caches', 'indexdb', 'localstorage']

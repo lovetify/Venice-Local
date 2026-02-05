@@ -1,0 +1,2261 @@
+===== index.html =====
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Base HTML scaffold with manifest + Google font for Space Grotesk -->
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Venice Local</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Authentication flow (signup/signin/guest) -->
+  <div id="auth-screen" class="screen">
+    <div class="auth-container">
+      <div class="auth-intro">
+        <!-- Left column highlights what the app does -->
+        <div class="auth-logo" aria-label="Venice Local">
+          <img class="veniceLogo" alt="Venice Local logo">
+          <span class="sr-only">Venice Local</span>
+        </div>
+        <h1>Venice Local</h1>
+        <p class="muted">Discover and support small businesses in downtown Venice, Florida. Sign in to review, save favorite businesses, and discover deals.</p>
+        <ul class="feature-list">
+          <li>Find local gems by category and rating</li>
+          <li>Leave trusted reviews with human verification</li>
+          <li>Save favorites and redeem hometown deals</li>
+        </ul>
+      </div>
+      <div class="auth-forms">
+        <div class="card" id="auth-choice-card">
+          <!-- Simple chooser that leads to either sign up or sign in; guest is allowed too -->
+          <h2>Get started with Venice Local!</h2>
+          <p class="muted">You can browse as a guest or create an account/sign in to save favorites and post reviews.</p>
+          <div class="choice-buttons">
+            <button id="start-create-btn" class="primary-btn">Create Account</button>
+            <button id="start-signin-btn" class="secondary-btn">Sign In</button>
+            <button id="guest-btn" class="ghost-btn">Continue as Guest</button>
+          </div>
+        </div>
+        <div class="card hidden" id="signup-card">
+          <!-- Signup collects a few extra fields to keep the demo human-friendly -->
+          <h2>Create Account</h2>
+          <form id="signup-form">
+            <label>Display Name<input type="text" id="signup-name" required></label>
+            <label>Email<input type="email" id="signup-email" required></label>
+            <label>Password<input type="password" id="signup-password" required></label>
+            <label>Profile Picture (URL)<input type="url" id="signup-avatar" placeholder="https://example.com/photo.jpg"></label>
+            <label>Profile Picture (Upload)<input type="file" id="signup-avatar-file" accept="image/*"></label>
+            <label>Role
+              <select id="signup-role" required>
+                <option value="">Select role</option>
+                <option value="owner">Business Owner</option>
+                <option value="patron">Local Customer</option>
+              </select>
+            </label>
+            <div class="verification">
+              <label><input type="checkbox" id="signup-human"> I'm not a robot</label>
+              <label class="challenge-label">
+                <span>Type the word: <strong>VENICE</strong></span>
+                <input type="text" id="signup-challenge" placeholder="VENICE" required>
+              </label>
+            </div>
+            <button type="submit" class="primary-btn">Create Account</button>
+            <p class="error" id="signup-error"></p>
+            <button type="button" class="link-btn" data-auth-back>← Back to options</button>
+          </form>
+        </div>
+        <div class="card hidden" id="signin-card">
+          <!-- Sign-in has a tiny math check to discourage bots -->
+          <h2>Sign In</h2>
+          <form id="signin-form">
+            <label>Email<input type="email" id="signin-email" required></label>
+            <label>Password<input type="password" id="signin-password" required></label>
+            <label>What is 2 + 3? (bot check)
+              <input type="number" id="signin-math" placeholder="5" required>
+            </label>
+            <button type="submit" class="secondary-btn">Sign In</button>
+            <p class="error" id="signin-error"></p>
+            <button type="button" class="link-btn" data-auth-back>← Back to options</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main application shell after login -->
+  <div id="app-screen" class="screen hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand" aria-label="Venice Local">
+          <!-- Brand lockup reused in top bar -->
+          <img class="veniceLogo" alt="Venice Local logo">
+          <span class="sr-only">Venice Local</span>
+        </div>
+        <nav class="nav-actions">
+          <!-- Nav buttons switch visible section via data-target -->
+          <button class="nav-btn" data-target="list">All Businesses</button>
+          <button class="nav-btn" data-target="favorites">My Favorites</button>
+          <button class="nav-btn owner-only" data-target="owner">Owner Dashboard</button>
+          <button class="nav-btn owner-only" data-target="add">Add My Business</button>
+          <button class="nav-btn" id="logout-btn">Logout</button>
+        </nav>
+      </div>
+      <div class="profile-actions">
+        <button class="nav-btn" data-target="profile">Profile</button>
+        <button class="avatar-chip" type="button" data-target="profile">
+          <img id="topbar-avatar" alt="Profile avatar">
+        </button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- Browse all businesses -->
+      <section id="list-section" class="view-section">
+        <!-- Filters + error state live up top -->
+        <div class="filters card">
+          <div class="filter-group">
+            <!-- Search + dropdowns power client-side filtering -->
+            <label>Search
+              <input type="text" id="search-input" placeholder="Search by name or keyword">
+            </label>
+            <label>Category
+              <select id="category-filter">
+                <option value="all">All</option>
+                <option value="Food">Food</option>
+                <option value="Retail">Retail</option>
+                <option value="Services">Services</option>
+                <option value="Wellness">Wellness</option>
+                <option value="Entertainment">Entertainment</option>
+              </select>
+            </label>
+            <label>Sort by
+              <select id="sort-select">
+                <option value="rating">Highest Rating</option>
+                <option value="reviews">Most Reviewed</option>
+                <option value="alpha">Alphabetical</option>
+              </select>
+            </label>
+          </div>
+          <div id="role-note" class="muted"></div>
+          <p id="business-load-error" class="error small"></p>
+        </div>
+        <div id="business-list" class="card-grid"></div>
+        <p id="empty-list" class="empty-text hidden">No businesses found. Be the first to add one!</p>
+      </section>
+
+      <!-- Saved favorites -->
+      <section id="favorites-section" class="view-section hidden">
+        <!-- Filled only after a user saves businesses -->
+        <div class="section-header">
+          <h2>My Favorites</h2>
+          <p class="muted">Saved local spots you love.</p>
+        </div>
+        <div id="favorites-list" class="card-grid"></div>
+        <p id="empty-favorites" class="empty-text hidden">You haven’t saved any local businesses yet.</p>
+      </section>
+
+      <!-- Owner add/edit form -->
+      <section id="add-section" class="view-section hidden">
+        <!-- Owners can add a business; file inputs are optional but supported -->
+        <div class="card form-card">
+          <h2>Add My Business</h2>
+          <form id="add-business-form">
+            <label>Business Name<input type="text" id="business-name" required></label>
+            <label>Category
+              <select id="business-category" required>
+                <option value="Food">Food</option>
+                <option value="Retail">Retail</option>
+                <option value="Services">Services</option>
+                <option value="Wellness">Wellness</option>
+                <option value="Entertainment">Entertainment</option>
+              </select>
+            </label>
+            <label>Address (Downtown Venice, FL)<input type="text" id="business-address" placeholder="e.g., 200 Main St, Venice, FL" required></label>
+            <label>Description<textarea id="business-description" rows="3" required></textarea></label>
+            <label>Hours<input type="text" id="business-hours" placeholder="Mon-Fri 8a-6p" required></label>
+            <label class="checkbox-inline">
+              <input type="checkbox" id="has-deals"> Add a special deal?
+            </label>
+            <label>Special Deals / Coupons<textarea id="business-deals" rows="2" placeholder="10% off for locals" disabled></textarea></label>
+            <div class="photo-inputs">
+              <label>Business Photo (URL)<input type="url" id="business-photo-url" placeholder="https://example.com/storefront.jpg"></label>
+              <label>Business Photo (Upload)<input type="file" id="business-photo-file" accept="image/*"></label>
+              <p class="muted small">Add one clear storefront photo. URL or upload; upload is recommended.</p>
+            </div>
+            <button type="submit" class="primary-btn">Save Business</button>
+            <p class="error" id="add-error"></p>
+            <p class="success" id="add-success"></p>
+          </form>
+        </div>
+      </section>
+
+      <!-- Owner dashboard metrics -->
+      <section id="owner-section" class="view-section hidden">
+        <!-- Simple stat cards + editable list scoped to owner -->
+        <div class="section-header">
+          <h2>Owner Dashboard</h2>
+          <p class="muted">Track performance and update your businesses.</p>
+        </div>
+        <div class="dashboard-grid">
+          <div class="card stat-card">
+            <p class="muted">My Businesses</p>
+            <h3 id="stat-count-businesses">0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Total Reviews</p>
+            <h3 id="stat-count-reviews">0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Avg Rating</p>
+            <h3 id="stat-avg-rating">0.0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Active Deals</p>
+            <h3 id="stat-count-deals">0</h3>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="dashboard-header">
+            <div>
+              <h3>My Businesses</h3>
+              <p class="muted small">Quickly edit details or post a new deal.</p>
+            </div>
+            <button class="secondary-btn owner-only" data-target="add">+ Add Business</button>
+          </div>
+          <div id="owner-business-list" class="owner-list"></div>
+          <p id="owner-empty" class="empty-text hidden">No businesses yet. Add your first business to get started.</p>
+        </div>
+      </section>
+
+      <!-- Profile drawer -->
+      <section id="profile-section" class="view-section hidden">
+        <div class="card">
+          <div class="profile-avatar">
+            <div class="avatar-frame">
+              <img id="profile-avatar" alt="Profile picture">
+            </div>
+            <div>
+              <h2>Account Settings</h2>
+            </div>
+          </div>
+          <p><strong>Display Name:</strong> <span id="profile-name"></span></p>
+          <p><strong>Email:</strong> <span id="profile-email"></span></p>
+          <p><strong>Role:</strong> <span id="profile-role"></span></p>
+          <form id="profile-photo-form" class="profile-photo-form">
+            <label>Profile Picture (URL)<input type="url" id="profile-avatar-url" placeholder="https://example.com/photo.jpg"></label>
+            <label>Profile Picture (Upload)<input type="file" id="profile-avatar-file" accept="image/*"></label>
+            <button type="submit" class="secondary-btn">Update Photo</button>
+            <p class="error" id="profile-avatar-error"></p>
+            <p class="success" id="profile-avatar-success"></p>
+          </form>
+          <p class="muted">Sign in or create an account to leave reviews or add businesses.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Business detail modal -->
+  <div id="detail-modal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-btn" id="close-detail">×</button>
+      <div id="detail-body"></div> <!-- Populated dynamically from renderer.js -->
+    </div>
+  </div>
+
+  <!-- All interactive behavior is in renderer.js -->
+  <script src="renderer.js"></script>
+</body>
+</html>
+
+
+===== main.js =====
+// Electron main process for Venice Local
+// Creates the desktop window and loads our app shell.
+const { app, BrowserWindow, session } = require('electron');
+const fs = require('fs/promises');
+const path = require('path');
+
+async function clearAppData() {
+  // Clear cache and storage so packaged builds start clean.
+  const userData = app.getPath('userData');
+  const serviceWorkerPath = path.join(userData, 'Service Worker');
+
+  // Remove the Service Worker folder directly; clearStorageData sometimes fails if it's corrupted.
+  await fs.rm(serviceWorkerPath, { recursive: true, force: true }).catch(() => {});
+
+  const ses = session.defaultSession;
+  // Clear both cache + persistent storage to avoid stale auth sessions.
+  await ses.clearCache();
+  await ses.clearStorageData({
+    storages: ['serviceworkers', 'caches', 'indexdb', 'localstorage']
+  });
+}
+
+function createWindow() {
+  // Build the main browser window with preload access.
+  const win = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 1000,
+    minHeight: 720,
+    backgroundColor: '#DEE1DD',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: true,
+      contextIsolation: false // Simplified for prototype; allows renderer to access required APIs
+    }
+  });
+
+  // Use an absolute path so packaged ZIP/DMG can always resolve assets relative to index.html.
+  win.loadFile(path.join(__dirname, 'index.html'));
+}
+
+app.whenReady().then(async () => {
+  // Show the UI when Electron is ready.
+  await clearAppData();
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  // Quit on all platforms except macOS (common Electron pattern).
+  if (process.platform !== 'darwin') app.quit();
+});
+
+
+===== renderer.js =====
+// Renderer process logic for Venice Local
+// Now uses Supabase for auth and business storage so data syncs across devices.
+
+const { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } = require('./supabaseClient');
+
+// --- Supabase configuration and asset references (updated) ---
+const assetUrl = (file) => new URL(`./assets/${file}`, window.location.href).href;
+const LOGO = assetUrl('venice-local.png');
+const DEFAULT_AVATAR = assetUrl('Default_pfp.svg.png');
+const BACKGROUND_IMAGE = assetUrl('downtown-venice.webp');
+const STORAGE_BUCKET = 'business-media';
+const BUSINESS_PHOTO_PLACEHOLDER = BACKGROUND_IMAGE;
+
+// --- In-memory state for the current session ---
+let currentUser = null;
+let businesses = [];
+let favorites = {};
+let businessPhotoSupported = false;
+
+// -----------------------------
+// Utility helpers
+// -----------------------------
+function calculateAverage(reviews = []) {
+  // Compute a rounded average rating from a list of reviews.
+  if (!reviews.length) return 0;
+  const sum = reviews.reduce((acc, r) => acc + Number(r.rating), 0);
+  return Math.round((sum / reviews.length) * 10) / 10;
+}
+
+function mapBusinessFromDb(row) {
+  // Convert a Supabase row into the shape the UI expects.
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    address: row.address,
+    shortDescription: row.short_description,
+    hours: row.hours,
+    specialDeals: row.special_deals,
+    ownerUserId: row.owner_id,
+    reviews: row.reviews || [],
+    averageRating: row.average_rating || 0,
+    photoUrl: row.photo_url || ''
+  };
+}
+
+function mapBusinessToDb(biz) {
+  // Convert a UI business object back into a Supabase row.
+  const payload = {
+    id: biz.id,
+    name: biz.name,
+    category: biz.category,
+    address: biz.address,
+    short_description: biz.shortDescription,
+    hours: biz.hours,
+    special_deals: biz.specialDeals,
+    owner_id: biz.ownerUserId,
+    reviews: biz.reviews || [],
+    average_rating: biz.averageRating || 0
+  };
+  if (businessPhotoSupported && biz.photoUrl) {
+    payload.photo_url = biz.photoUrl;
+  }
+  return payload;
+}
+
+async function fetchProfile(userId) {
+  // Load a profile row for the signed-in user.
+  if (!userId) return null;
+  try {
+    const data = await restGet(`/profiles?id=eq.${userId}&limit=1`);
+    return data?.[0] || null;
+  } catch (error) {
+    console.warn('Profile fetch failed', error.message);
+    return null;
+  }
+}
+
+async function upsertProfile({ id, name, role, avatar, email }) {
+  // Insert or update a profile to keep auth metadata in sync.
+  const { error } = await supabase.from('profiles').upsert({
+    id,
+    name,
+    role,
+    avatar,
+    email
+  });
+  if (error) throw error;
+}
+
+function setBusinessLoadError(message = '') {
+  // Surface data loading issues in the UI.
+  const el = document.getElementById('business-load-error');
+  if (el) el.textContent = message;
+}
+
+async function restGet(path) {
+  // Use plain fetch to Supabase REST to avoid client fetch differences across builds.
+  const url = `${SUPABASE_URL}/rest/v1${path}`;
+  const res = await window.fetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Accept: 'application/json'
+    }
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`REST ${res.status}: ${text || res.statusText}`);
+  }
+  return res.json();
+}
+
+async function fetchReviewsForBusinesses(ids = []) {
+  // Fetch all reviews for a set of business IDs.
+  if (!ids.length) return {};
+  const map = {};
+  try {
+    const { data, error } = await supabase.from('reviews').select('*').in('business_id', ids);
+    if (error) throw error;
+    (data || []).forEach((r) => {
+      map[r.business_id] = map[r.business_id] || [];
+      map[r.business_id].push({
+        userId: r.user_id,
+        userName: r.user_name,
+        rating: Number(r.rating),
+        comment: r.comment,
+        date: r.date,
+        avatar: r.avatar,
+        photo: r.photo || ''
+      });
+    });
+  } catch (err) {
+    console.warn('Review fetch failed; continuing without linked reviews.', err.message);
+  }
+  return map;
+}
+
+async function fetchBusinesses() {
+  // Retrieve all businesses, attach reviews, and compute ratings.
+  try {
+    const data = await restGet('/businesses?select=*&order=name.asc');
+    const mapped = (data ?? []).map(mapBusinessFromDb).filter(Boolean);
+    const reviewMap = await fetchReviewsForBusinesses(mapped.map((b) => b.id));
+    mapped.forEach((biz) => {
+      const reviews = reviewMap[biz.id] || biz.reviews || [];
+      biz.reviews = reviews;
+      biz.averageRating = calculateAverage(reviews);
+    });
+    setBusinessLoadError(mapped.length ? '' : 'No businesses found in Supabase.');
+    return mapped;
+  } catch (err) {
+    console.error('Failed to fetch businesses', err);
+    const detail = err?.message || 'Unknown error';
+    setBusinessLoadError(`Could not load businesses from Supabase: ${detail}. Check connection and RLS policies.`);
+    return [];
+  }
+}
+
+async function fetchFavoritesForUser(userId) {
+  // Load the IDs the user has saved as favorites.
+  if (!userId) return [];
+  try {
+    const data = await restGet(`/favorites?select=business_id&user_id=eq.${userId}`);
+    return data.map(r => r.business_id);
+  } catch (error) {
+    console.warn('Favorites fetch failed', error.message);
+    return [];
+  }
+}
+
+async function syncBusinessesAndFavorites() {
+  // Keep in-memory businesses and favorites in sync with Supabase.
+  businesses = await fetchBusinesses();
+  if (currentUser && currentUser.role !== 'guest') {
+    const favs = await fetchFavoritesForUser(currentUser.id);
+    favorites[currentUser.id] = favs;
+  }
+  renderBusinesses();
+  renderFavoritesView();
+  if (currentUser?.role === 'owner') renderOwnerDashboard();
+}
+
+function buildAvatarPlaceholder(name = 'Guest') {
+  // Generate a simple fallback SVG avatar for missing photos.
+  const initial = (name.trim()[0] || 'G').toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="100%" height="100%" rx="18" fill="%23175f62"/><text x="50%" y="55%" font-family="Manrope, Arial, sans-serif" font-size="70" fill="%23ffffff" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+async function checkBusinessPhotoSupport() {
+  // Detect if the photo_url column exists before allowing uploads.
+  if (businessPhotoSupported) return true;
+  try {
+    await restGet('/businesses?select=photo_url&limit=1');
+    businessPhotoSupported = true;
+  } catch (error) {
+    businessPhotoSupported = false;
+    console.warn('Business photo column missing. Add photo_url to businesses to enable photos.');
+  }
+  return businessPhotoSupported;
+}
+
+function readFileAsDataURL(file) {
+  // Convert an uploaded file into a data URL string.
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function applyStaticAssets() {
+  // Wire in logo and background images once the DOM is ready.
+  const logoSrc = LOGO;
+  document.querySelectorAll('.veniceLogo').forEach(img => {
+    img.src = logoSrc;
+  });
+  document.documentElement.style.setProperty('--auth-bg-image', `url('${BACKGROUND_IMAGE}')`);
+}
+
+function setView(target) {
+  // Toggle between main app sections and optionally refresh owner data.
+  const sections = document.querySelectorAll('.view-section');
+  sections.forEach(section => {
+    section.classList.add('hidden');
+    section.classList.remove('animate-in');
+  });
+  const selected = document.getElementById(`${target}-section`);
+  if (selected) {
+    selected.classList.remove('hidden');
+    selected.classList.add('animate-in');
+    setTimeout(() => selected.classList.remove('animate-in'), 350);
+    if (target === 'owner') renderOwnerDashboard();
+  }
+}
+
+async function uploadImage(file, folder) {
+  // Upload an image to Supabase storage and return the public URL.
+  const safeName = `${folder}/${crypto.randomUUID()}-${file.name.replace(/\s+/g, '-')}`;
+  const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(safeName, file, { cacheControl: '3600', upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(safeName);
+  return data?.publicUrl;
+}
+
+async function resolvePhoto({ file, url, folder }) {
+  // Decide whether to use an uploaded file or a direct URL.
+  if (file) return uploadImage(file, folder);
+  if (url) return url;
+  return '';
+}
+
+function updateRoleVisibility() {
+  // Show/hide owner-only UI and adjust helper text based on role.
+  document.querySelectorAll('.owner-only').forEach(btn => {
+    btn.style.display = currentUser && currentUser.role === 'owner' ? 'inline-flex' : 'none';
+  });
+  const roleNote = document.getElementById('role-note');
+  const authBtn = document.getElementById('logout-btn');
+
+  if (!currentUser || currentUser.role === 'guest') {
+    roleNote.textContent = 'Guests can browse but must sign in to review, save favorites, or add businesses.';
+    if (authBtn) authBtn.textContent = 'Sign In / Create Account';
+  } else if (currentUser.role === 'owner') {
+    roleNote.textContent = 'Business Owners can add/edit their businesses and leave reviews.';
+    if (authBtn) authBtn.textContent = 'Logout';
+  } else {
+    roleNote.textContent = 'Local Customers can leave reviews and save favorites.';
+    if (authBtn) authBtn.textContent = 'Logout';
+  }
+}
+
+function renderProfile() {
+  // Populate profile drawer and topbar avatar with current user info.
+  document.getElementById('profile-name').textContent = currentUser?.name || 'Guest';
+  document.getElementById('profile-email').textContent = currentUser?.email || 'Not signed in';
+  document.getElementById('profile-role').textContent = currentUser?.role || 'Guest';
+  const avatarEl = document.getElementById('profile-avatar');
+  if (avatarEl) {
+    const fallback = buildAvatarPlaceholder(currentUser?.name || 'Guest');
+    const placeholder = DEFAULT_AVATAR;
+    const src = currentUser?.avatar || placeholder;
+    avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = fallback; };
+    avatarEl.src = src;
+    avatarEl.alt = `${currentUser?.name || 'Guest'} avatar`;
+  }
+  const topbarAvatar = document.getElementById('topbar-avatar');
+  if (topbarAvatar) {
+    const fallback = buildAvatarPlaceholder(currentUser?.name || 'Guest');
+    const placeholder = DEFAULT_AVATAR;
+    const src = currentUser?.avatar || placeholder;
+    topbarAvatar.onerror = () => { topbarAvatar.onerror = null; topbarAvatar.src = fallback; };
+    topbarAvatar.src = src;
+    topbarAvatar.alt = `${currentUser?.name || 'Guest'} avatar`;
+  }
+}
+
+async function updateProfilePhoto(event) {
+  // Handle avatar updates via URL or uploaded file.
+  event.preventDefault();
+  const errorEl = document.getElementById('profile-avatar-error');
+  const successEl = document.getElementById('profile-avatar-success');
+  const urlInput = document.getElementById('profile-avatar-url');
+  const fileInput = document.getElementById('profile-avatar-file');
+  errorEl.textContent = '';
+  successEl.textContent = '';
+
+  if (!currentUser || currentUser.role === 'guest') {
+    errorEl.textContent = 'Sign in to update your profile photo.';
+    return;
+  }
+
+  const avatarUrl = urlInput.value.trim();
+  const avatarFile = fileInput.files[0];
+
+  if (!avatarUrl && !avatarFile) {
+    errorEl.textContent = 'Provide a photo URL or upload an image.';
+    return;
+  }
+
+  try {
+    const avatar = avatarFile ? await readFileAsDataURL(avatarFile) : avatarUrl;
+    await supabase.auth.updateUser({ data: { avatar } });
+    await upsertProfile({
+      id: currentUser.id,
+      name: currentUser.name,
+      role: currentUser.role,
+      avatar,
+      email: currentUser.email
+    });
+    currentUser.avatar = avatar;
+    renderProfile();
+    successEl.textContent = 'Profile photo updated.';
+    document.getElementById('profile-photo-form').reset();
+  } catch (err) {
+    errorEl.textContent = 'Could not update photo. Try again.';
+  }
+}
+
+function renderBusinesses() {
+  // Render the main business list with filters and sorting.
+  const listEl = document.getElementById('business-list');
+  listEl.innerHTML = '';
+
+  const searchTerm = document.getElementById('search-input').value.toLowerCase();
+  const category = document.getElementById('category-filter').value;
+  const sortBy = document.getElementById('sort-select').value;
+
+  let filtered = businesses.filter(biz => {
+    const matchesSearch = biz.name.toLowerCase().includes(searchTerm) || biz.shortDescription.toLowerCase().includes(searchTerm);
+    const matchesCategory = category === 'all' || biz.category === category;
+    return matchesSearch && matchesCategory;
+  });
+
+  if (sortBy === 'rating') {
+    filtered.sort((a, b) => b.averageRating - a.averageRating);
+  } else if (sortBy === 'reviews') {
+    filtered.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
+  } else if (sortBy === 'alpha') {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  document.getElementById('empty-list').classList.toggle('hidden', filtered.length > 0);
+
+  filtered.forEach(biz => {
+    const card = document.createElement('div');
+    card.className = 'card business-card';
+    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    const hasDeal = !!biz.specialDeals;
+    card.innerHTML = `
+      <div class="business-photo">
+        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+      </div>
+      <div class="card-header">
+        <div>
+          <h3>${biz.name}</h3>
+          <p class="muted">${biz.category} • ${biz.address}</p>
+        </div>
+        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+      </div>
+      <p class="description">${biz.shortDescription}</p>
+      <div class="card-footer">
+        ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
+        <div>
+          ${renderFavoriteButton(biz.id)}
+          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
+        </div>
+      </div>
+    `;
+    listEl.appendChild(card);
+  });
+
+  if (currentUser?.role === 'owner') renderOwnerDashboard();
+}
+
+function renderFavoriteButton(businessId) {
+  // Build a save/unsave button for the given business.
+  if (!currentUser || currentUser.role === 'guest') return '';
+  const saved = favorites[currentUser.id]?.includes(businessId);
+  return `<button class="secondary-btn" data-fav="${businessId}">${saved ? '♡ Saved' : '♡ Save'}</button>`;
+}
+
+function renderFavoritesView() {
+  // Populate the favorites grid based on saved IDs.
+  const favSection = document.getElementById('favorites-list');
+  favSection.innerHTML = '';
+  const favoriteIds = favorites[currentUser?.id] || [];
+  const savedBusinesses = businesses.filter(b => favoriteIds.includes(b.id));
+  document.getElementById('empty-favorites').classList.toggle('hidden', savedBusinesses.length > 0);
+
+  savedBusinesses.forEach(biz => {
+    const card = document.createElement('div');
+    card.className = 'card business-card';
+    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    const hasDeal = !!biz.specialDeals;
+    card.innerHTML = `
+      <div class="business-photo">
+        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+      </div>
+      <div class="card-header">
+        <div>
+          <h3>${biz.name}</h3>
+          <p class="muted">${biz.category} • ${biz.address}</p>
+        </div>
+        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+      </div>
+      <p class="description">${biz.shortDescription}</p>
+      <div class="card-footer">
+        ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
+        <div>
+          <button class="secondary-btn" data-fav="${biz.id}">♡ Saved</button>
+          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
+        </div>
+      </div>
+    `;
+    favSection.appendChild(card);
+  });
+}
+
+function renderOwnerDashboard() {
+  // Show owner stats and editable cards for businesses owned by the user.
+  if (!currentUser || currentUser.role !== 'owner') return;
+  const owned = businesses.filter(b => b.ownerUserId === currentUser.id);
+  const totalReviews = owned.reduce((acc, biz) => acc + (biz.reviews?.length || 0), 0);
+  const avgRating = owned.length
+    ? (owned.reduce((acc, biz) => acc + (biz.averageRating || 0), 0) / owned.length).toFixed(1)
+    : '0.0';
+  const activeDeals = owned.filter(b => b.specialDeals?.trim()).length;
+
+  const bizCountEl = document.getElementById('stat-count-businesses');
+  const reviewEl = document.getElementById('stat-count-reviews');
+  const ratingEl = document.getElementById('stat-avg-rating');
+  const dealsEl = document.getElementById('stat-count-deals');
+  if (bizCountEl) bizCountEl.textContent = owned.length;
+  if (reviewEl) reviewEl.textContent = totalReviews;
+  if (ratingEl) ratingEl.textContent = avgRating;
+  if (dealsEl) dealsEl.textContent = activeDeals;
+
+  const listEl = document.getElementById('owner-business-list');
+  const emptyEl = document.getElementById('owner-empty');
+  if (!listEl || !emptyEl) return;
+  listEl.innerHTML = '';
+  emptyEl.classList.toggle('hidden', owned.length > 0);
+
+  owned.forEach(biz => {
+    const card = document.createElement('div');
+    card.className = 'owner-card';
+    card.innerHTML = `
+      <h4>${biz.name}</h4>
+      <p class="meta">${biz.category} • ${biz.address}</p>
+      <p class="meta">Rating: ${biz.averageRating.toFixed(1)} • Reviews: ${biz.reviews?.length || 0}</p>
+      <p class="deal">${biz.specialDeals ? `Deal: ${biz.specialDeals}` : 'No deal posted yet'}</p>
+      <div class="actions">
+        <button class="secondary-btn" data-edit="${biz.id}">Edit</button>
+        <button class="ghost-btn" data-detail="${biz.id}">View</button>
+      </div>
+    `;
+    listEl.appendChild(card);
+  });
+}
+
+// -----------------------------
+// Authentication
+// -----------------------------
+function showAuthCard(mode = 'choice') {
+  // Swap between signup, signin, and choice cards.
+  const choice = document.getElementById('auth-choice-card');
+  const signup = document.getElementById('signup-card');
+  const signin = document.getElementById('signin-card');
+  [choice, signup, signin].forEach(card => {
+    if (card) card.classList.add('hidden');
+  });
+  if (mode === 'signup' && signup) signup.classList.remove('hidden');
+  else if (mode === 'signin' && signin) signin.classList.remove('hidden');
+  else if (choice) choice.classList.remove('hidden');
+}
+
+async function signUp(event) {
+  // Create a new Supabase user and profile after basic human checks.
+  event.preventDefault();
+  const name = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim().toLowerCase();
+  const password = document.getElementById('signup-password').value.trim();
+  const avatarUrl = document.getElementById('signup-avatar').value.trim();
+  const avatarFile = document.getElementById('signup-avatar-file').files[0];
+  const role = document.getElementById('signup-role').value;
+  const humanCheck = document.getElementById('signup-human').checked;
+  const challenge = document.getElementById('signup-challenge').value.trim().toUpperCase();
+  const errorEl = document.getElementById('signup-error');
+  errorEl.textContent = '';
+
+  if (!name || !email || !password || !role) {
+    errorEl.textContent = 'Please fill every field and choose a role.';
+    return;
+  }
+  if (!humanCheck || challenge !== 'VENICE') {
+    errorEl.textContent = 'Verification failed. Please confirm you are human and type VENICE.';
+    return;
+  }
+  try {
+    const avatar = avatarFile ? await readFileAsDataURL(avatarFile) : (avatarUrl || DEFAULT_AVATAR);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name, role, avatar }
+      }
+    });
+    if (error) throw error;
+    const authedUser = data.user;
+    await upsertProfile({ id: authedUser.id, name, role, avatar, email });
+    currentUser = {
+      id: authedUser.id,
+      name,
+      email,
+      role,
+      avatar
+    };
+    enterApp();
+  } catch (err) {
+    errorEl.textContent = err.message || 'Sign up failed. Please try again.';
+  }
+}
+
+async function signIn(event) {
+  // Sign an existing user in and hydrate profile details.
+  event.preventDefault();
+  const email = document.getElementById('signin-email').value.trim().toLowerCase();
+  const password = document.getElementById('signin-password').value.trim();
+  const math = Number(document.getElementById('signin-math').value);
+  const errorEl = document.getElementById('signin-error');
+  errorEl.textContent = '';
+
+  if (math !== 5) {
+    errorEl.textContent = 'Bot check failed. 2 + 3 should equal 5.';
+    return;
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    errorEl.textContent = 'Invalid credentials. Please try again or create an account.';
+    return;
+  }
+
+  const authedUser = data.user;
+  const profile = await fetchProfile(authedUser.id);
+  currentUser = {
+    id: authedUser.id,
+    name: profile?.name || authedUser.user_metadata?.name || authedUser.email,
+    email: authedUser.email,
+    role: profile?.role || authedUser.user_metadata?.role || 'patron',
+    avatar: profile?.avatar || authedUser.user_metadata?.avatar || DEFAULT_AVATAR
+  };
+  enterApp();
+}
+
+function continueAsGuest() {
+  // Let users browse without creating an account.
+  currentUser = { id: 'guest', name: 'Guest', email: 'guest', role: 'guest', avatar: DEFAULT_AVATAR };
+  enterApp();
+}
+
+function enterApp() {
+  // Transition from auth screen into the main app shell.
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app-screen').classList.remove('hidden');
+  updateRoleVisibility();
+  renderProfile();
+  checkBusinessPhotoSupport();
+  syncBusinessesAndFavorites();
+  setView('list');
+}
+
+function logout() {
+  // Clear session info and return to the auth screen.
+  currentUser = null;
+  supabase.auth.signOut();
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('app-screen').classList.add('hidden');
+  document.getElementById('signin-form').reset();
+  document.getElementById('signup-form').reset();
+  showAuthCard('choice');
+  const profileForm = document.getElementById('profile-photo-form');
+  if (profileForm) profileForm.reset();
+  const profileError = document.getElementById('profile-avatar-error');
+  const profileSuccess = document.getElementById('profile-avatar-success');
+  if (profileError) profileError.textContent = '';
+  if (profileSuccess) profileSuccess.textContent = '';
+}
+
+// -----------------------------
+// Business detail modal & reviews
+// -----------------------------
+function openDetail(businessId) {
+  // Populate and show the business detail modal.
+  const biz = businesses.find(b => b.id === businessId);
+  if (!biz) return;
+  const modal = document.getElementById('detail-modal');
+  const body = document.getElementById('detail-body');
+  const bizPhoto = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+  const reviewsHTML = biz.reviews && biz.reviews.length
+    ? biz.reviews.map(r => {
+        const avatar = r.avatar || DEFAULT_AVATAR || buildAvatarPlaceholder(r.userName || 'User');
+        const fallback = buildAvatarPlaceholder(r.userName || 'User');
+        return `<div class="review">
+          <div class="review-header">
+            <img class="review-avatar" src="${avatar}" alt="${r.userName || 'Reviewer'} avatar" onerror="this.onerror=null;this.src='${fallback}'">
+            <div>
+              <div class="review-meta"><strong>${r.userName}</strong> • ${new Date(r.date).toLocaleDateString()}</div>
+              <div class="review-rating">⭐ ${r.rating}</div>
+            </div>
+          </div>
+          <p>${r.comment}</p>
+          ${r.photo ? `<img class="review-photo" src="${r.photo}" alt="Review from ${r.userName}" onerror="this.style.display='none'">` : ''}
+        </div>`;
+      }).join('')
+    : '<p class="empty-text">Be the first to review this business!</p>';
+
+  const canEdit = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
+  const canReview = currentUser && currentUser.role !== 'guest';
+
+  body.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <h2>${biz.name}</h2>
+        <p class="muted">${biz.category} • ${biz.address}</p>
+        <p>${biz.shortDescription}</p>
+        <p><strong>Hours:</strong> ${biz.hours}</p>
+      </div>
+      <div class="rating-large"><span>${biz.averageRating.toFixed(1)}</span></div>
+    </div>
+    <div class="detail-photo">
+      <img src="${bizPhoto}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+    </div>
+    <div class="deal-banner">Special deals: ${biz.specialDeals || 'No deals posted yet.'}</div>
+    <div class="detail-actions">
+      ${renderFavoriteButton(biz.id)}
+      ${canEdit ? `<button class="secondary-btn" data-edit="${biz.id}">Edit Business</button>` : ''}
+    </div>
+    <h3>Reviews</h3>
+    <div class="reviews">${reviewsHTML}</div>
+    ${canReview ? reviewFormTemplate(biz.id) : '<p class="muted">Sign in to leave a review.</p>'}
+  `;
+
+  modal.classList.remove('hidden');
+}
+
+function reviewFormTemplate(id) {
+  // Lightweight template for the review form.
+  return `
+    <form class="review-form" data-review="${id}">
+      <label>Rating (1-5)<input type="number" min="1" max="5" required></label>
+      <label>Comment<textarea rows="2" required></textarea></label>
+      <label>Photo (URL, optional)<input type="url" class="review-photo-url" placeholder="https://example.com/photo.jpg"></label>
+      <label>Photo (Upload, optional)<input type="file" class="review-photo-file" accept="image/*"></label>
+      <label>Type the word LOCAL to verify<input type="text" placeholder="LOCAL" required></label>
+      <button type="submit" class="primary-btn">Submit Review</button>
+      <p class="error form-error"></p>
+    </form>
+  `;
+}
+
+function closeDetail() {
+  // Hide the detail modal and clear old content.
+  document.getElementById('detail-modal').classList.add('hidden');
+  document.getElementById('detail-body').innerHTML = '';
+}
+
+async function submitReview(form) {
+  // Validate and submit a new review, handling optional photo uploads.
+  const bizId = form.getAttribute('data-review');
+  const ratingInput = form.querySelector('input[type="number"]');
+  const commentInput = form.querySelector('textarea');
+  const verifyInput = form.querySelector('input[type="text"]');
+  const photoUrlInput = form.querySelector('.review-photo-url');
+  const photoFileInput = form.querySelector('.review-photo-file');
+  const errorEl = form.querySelector('.form-error');
+  errorEl.textContent = '';
+
+  const rating = Number(ratingInput.value);
+  const comment = commentInput.value.trim();
+  const verify = verifyInput.value.trim().toUpperCase();
+  const photoUrl = photoUrlInput ? photoUrlInput.value.trim() : '';
+  const photoFile = photoFileInput ? photoFileInput.files[0] : null;
+
+  if (!rating || rating < 1 || rating > 5) {
+    errorEl.textContent = 'Rating must be between 1 and 5.';
+    return;
+  }
+  if (!comment) {
+    errorEl.textContent = 'Please add a short comment.';
+    return;
+  }
+  if (verify !== 'LOCAL') {
+    errorEl.textContent = 'Verification failed. Type LOCAL to confirm you are human.';
+    return;
+  }
+
+  const biz = businesses.find(b => b.id === bizId);
+  if (!biz) return;
+
+  const newReview = {
+    userId: currentUser.id,
+    userName: currentUser.name,
+    avatar: currentUser.avatar || buildAvatarPlaceholder(currentUser.name || 'User'),
+    rating,
+    comment,
+    date: new Date().toISOString()
+  };
+  try {
+    if (photoFile || photoUrl) {
+      try {
+        newReview.photo = await resolvePhoto({ file: photoFile, url: photoUrl, folder: `reviews/${bizId}` });
+      } catch (uploadErr) {
+        errorEl.textContent = 'Could not upload photo. Try a smaller file or use a URL.';
+        return;
+      }
+    }
+
+    // Primary path: insert into dedicated reviews table (works even if business row RLS blocks patrons).
+    const { error: reviewInsertError } = await supabase.from('reviews').insert({
+      business_id: bizId,
+      user_id: newReview.userId,
+      user_name: newReview.userName,
+      rating: newReview.rating,
+      comment: newReview.comment,
+      date: newReview.date,
+      avatar: newReview.avatar,
+      photo: newReview.photo || ''
+    });
+
+    if (reviewInsertError) {
+      // Fallback to legacy embedded reviews on the business row.
+      console.warn('Dedicated review insert failed, attempting to store on business row', reviewInsertError.message);
+      biz.reviews.push(newReview);
+      biz.averageRating = calculateAverage(biz.reviews);
+      await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', bizId);
+    }
+
+    await syncBusinessesAndFavorites();
+    form.reset();
+    openDetail(bizId); // re-render detail with new review
+  } catch (err) {
+    errorEl.textContent = 'Could not submit review. Please try again.';
+  }
+}
+
+// -----------------------------
+// Favorites
+// -----------------------------
+async function toggleFavorite(businessId) {
+  // Save or remove a business from the user's favorites in Supabase.
+  if (!currentUser || currentUser.role === 'guest') return;
+  favorites[currentUser.id] = favorites[currentUser.id] || [];
+  const list = favorites[currentUser.id];
+  const index = list.indexOf(businessId);
+  const detailModal = document.getElementById('detail-modal');
+  const detailOpen = detailModal && !detailModal.classList.contains('hidden');
+  try {
+    if (index >= 0) {
+      await supabase.from('favorites').delete().match({ user_id: currentUser.id, business_id: businessId });
+      list.splice(index, 1);
+    } else {
+      await supabase.from('favorites').upsert({ user_id: currentUser.id, business_id: businessId });
+      list.push(businessId);
+    }
+    await syncBusinessesAndFavorites();
+    // Keep any open detail modal and existing buttons in sync with the latest save state.
+    document.querySelectorAll(`[data-fav="${businessId}"]`).forEach(btn => {
+      const isSaved = favorites[currentUser.id]?.includes(businessId);
+      btn.textContent = isSaved ? '♡ Saved' : '♡ Save';
+    });
+    if (detailOpen) openDetail(businessId);
+  } catch (err) {
+    console.error('Favorite toggle failed', err.message);
+  }
+}
+
+// -----------------------------
+// Add / Edit business
+// -----------------------------
+async function submitBusiness(event) {
+  // Add a new business or update an existing one owned by the user.
+  event.preventDefault();
+  if (!currentUser || currentUser.role === 'guest') {
+    document.getElementById('add-error').textContent = 'Sign in as a business owner to add businesses.';
+    return;
+  }
+  const name = document.getElementById('business-name').value.trim();
+  const category = document.getElementById('business-category').value;
+  const address = document.getElementById('business-address').value.trim();
+  const description = document.getElementById('business-description').value.trim();
+  const hours = document.getElementById('business-hours').value.trim();
+  const hasDeals = document.getElementById('has-deals').checked;
+  const deals = hasDeals ? document.getElementById('business-deals').value.trim() : '';
+  const photoUrlInput = document.getElementById('business-photo-url').value.trim();
+  const photoFile = document.getElementById('business-photo-file').files[0];
+  const errorEl = document.getElementById('add-error');
+  const successEl = document.getElementById('add-success');
+  errorEl.textContent = '';
+  successEl.textContent = '';
+
+  if (!name || !category || !address || !description || !hours) {
+    errorEl.textContent = 'All fields except deals are required.';
+    return;
+  }
+  if (!address.toLowerCase().includes('venice')) {
+    errorEl.textContent = 'Address must reference Venice, FL (downtown).';
+    return;
+  }
+
+  try {
+    await checkBusinessPhotoSupport();
+    if ((photoUrlInput || photoFile) && !businessPhotoSupported) {
+      errorEl.textContent = 'Business photos need a photo_url column in Supabase. Add it, then try again.';
+      return;
+    }
+
+    let photoUrl = '';
+    if (businessPhotoSupported && (photoUrlInput || photoFile)) {
+      try {
+        photoUrl = await resolvePhoto({ file: photoFile, url: photoUrlInput, folder: `businesses/${currentUser?.id || 'guest'}` });
+      } catch (uploadErr) {
+        errorEl.textContent = 'Could not upload business photo. Try a smaller file or provide a URL.';
+        return;
+      }
+    }
+
+    const editingId = event.target.getAttribute('data-editing');
+    if (editingId) {
+      const biz = businesses.find(b => b.id === editingId);
+      if (biz && biz.ownerUserId === currentUser.id) {
+        biz.name = name;
+        biz.category = category;
+        biz.address = address;
+        biz.shortDescription = description;
+        biz.hours = hours;
+        biz.specialDeals = deals;
+        if (businessPhotoSupported && photoUrl) {
+          biz.photoUrl = photoUrl;
+        }
+        const { error: updateError } = await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', editingId);
+        if (updateError) throw updateError;
+      }
+      event.target.removeAttribute('data-editing');
+      successEl.textContent = 'Business updated successfully.';
+    } else {
+      const newBusiness = {
+        id: crypto.randomUUID(),
+        name,
+        category,
+        address,
+        shortDescription: description,
+        hours,
+        specialDeals: deals,
+        ownerUserId: currentUser.id,
+        reviews: [],
+        averageRating: 0,
+        photoUrl: businessPhotoSupported ? photoUrl : ''
+      };
+      const { error: insertError } = await supabase.from('businesses').insert(mapBusinessToDb(newBusiness));
+      if (insertError) throw insertError;
+      businesses.push(newBusiness);
+      successEl.textContent = 'Business added successfully.';
+    }
+
+    await syncBusinessesAndFavorites();
+    event.target.reset();
+    setView('owner'); // exit add screen after saving
+  } catch (err) {
+    console.error('Business save failed', err.message || err);
+    errorEl.textContent = err?.message || 'Could not save business. Please try again.';
+  }
+}
+
+function startEditBusiness(bizId) {
+  // Pre-fill the add form with an existing business for editing.
+  const biz = businesses.find(b => b.id === bizId);
+  if (!biz || biz.ownerUserId !== currentUser.id) return;
+  setView('add');
+  const form = document.getElementById('add-business-form');
+  form.setAttribute('data-editing', bizId);
+  document.getElementById('business-name').value = biz.name;
+  document.getElementById('business-category').value = biz.category;
+  document.getElementById('business-address').value = biz.address;
+  document.getElementById('business-description').value = biz.shortDescription;
+  document.getElementById('business-hours').value = biz.hours;
+  document.getElementById('has-deals').checked = !!biz.specialDeals;
+  document.getElementById('business-deals').disabled = !biz.specialDeals;
+  document.getElementById('business-deals').value = biz.specialDeals;
+  const photoUrlInput = document.getElementById('business-photo-url');
+  const photoFileInput = document.getElementById('business-photo-file');
+  if (photoUrlInput) photoUrlInput.value = biz.photoUrl || '';
+  if (photoFileInput) photoFileInput.value = '';
+  document.getElementById('add-success').textContent = 'Editing your business. Save changes when ready.';
+}
+
+// -----------------------------
+// Event bindings
+// -----------------------------
+function bindEvents() {
+  // Connect UI controls to their handlers once the DOM is ready.
+  document.getElementById('signup-form').addEventListener('submit', signUp);
+  document.getElementById('signin-form').addEventListener('submit', signIn);
+  document.getElementById('start-create-btn').addEventListener('click', () => showAuthCard('signup'));
+  document.getElementById('start-signin-btn').addEventListener('click', () => showAuthCard('signin'));
+  document.getElementById('guest-btn').addEventListener('click', continueAsGuest);
+  document.querySelectorAll('[data-auth-back]').forEach(btn => {
+    btn.addEventListener('click', () => showAuthCard('choice'));
+  });
+  document.getElementById('logout-btn').addEventListener('click', logout);
+  document.getElementById('profile-photo-form').addEventListener('submit', updateProfilePhoto);
+
+  document.querySelectorAll('[data-target]:not(.avatar-chip)').forEach(btn => {
+    const target = btn.getAttribute('data-target');
+    if (target) {
+      btn.addEventListener('click', () => {
+        setView(target);
+        if (target === 'favorites') renderFavoritesView();
+      });
+    }
+  });
+
+  document.querySelectorAll('.avatar-chip').forEach(chip => {
+    const target = chip.getAttribute('data-target');
+    if (target) {
+      chip.addEventListener('click', () => setView(target));
+    }
+  });
+
+  document.getElementById('search-input').addEventListener('input', renderBusinesses);
+  document.getElementById('category-filter').addEventListener('change', renderBusinesses);
+  document.getElementById('sort-select').addEventListener('change', renderBusinesses);
+  const hasDeals = document.getElementById('has-deals');
+  const dealsField = document.getElementById('business-deals');
+  hasDeals.addEventListener('change', () => {
+    dealsField.disabled = !hasDeals.checked;
+    if (!hasDeals.checked) dealsField.value = '';
+  });
+
+  document.getElementById('business-list').addEventListener('click', (e) => {
+    if (e.target.dataset.detail) {
+      openDetail(e.target.dataset.detail);
+    }
+    if (e.target.dataset.fav) {
+      toggleFavorite(e.target.dataset.fav);
+    }
+  });
+
+  document.getElementById('favorites-list').addEventListener('click', (e) => {
+    if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
+    if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
+  });
+
+  const ownerList = document.getElementById('owner-business-list');
+  if (ownerList) {
+    ownerList.addEventListener('click', (e) => {
+      if (e.target.dataset.edit) startEditBusiness(e.target.dataset.edit);
+      if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
+    });
+  }
+
+  document.getElementById('detail-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'detail-modal') closeDetail();
+  });
+  document.getElementById('close-detail').addEventListener('click', closeDetail);
+
+  document.getElementById('detail-body').addEventListener('submit', (e) => {
+    if (e.target.dataset.review) {
+      e.preventDefault();
+      submitReview(e.target);
+    }
+  });
+
+  document.getElementById('detail-body').addEventListener('click', (e) => {
+    if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
+    if (e.target.dataset.edit) startEditBusiness(e.target.dataset.edit);
+  });
+
+  document.getElementById('add-business-form').addEventListener('submit', submitBusiness);
+
+}
+
+// -----------------------------
+// Initialization
+// -----------------------------
+async function initSession() {
+  // Restore an existing Supabase session if available.
+  const { data } = await supabase.auth.getSession();
+  const session = data?.session;
+  if (session?.user) {
+    const profile = await fetchProfile(session.user.id);
+    currentUser = {
+      id: session.user.id,
+      name: profile?.name || session.user.user_metadata?.name || session.user.email,
+      email: session.user.email,
+      role: profile?.role || session.user.user_metadata?.role || 'patron',
+      avatar: profile?.avatar || session.user.user_metadata?.avatar || DEFAULT_AVATAR
+    };
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('app-screen').classList.remove('hidden');
+    updateRoleVisibility();
+    renderProfile();
+  } else {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('app-screen').classList.add('hidden');
+  }
+  await checkBusinessPhotoSupport();
+  await syncBusinessesAndFavorites();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Kick off event wiring, assets, and a fresh data sync.
+  bindEvents();
+  showAuthCard('choice');
+  applyStaticAssets();
+  initSession();
+
+  // Disable SW caching; just clean up any old workers/caches so Supabase calls are always live in npm start, dmg, and zip.
+  const CACHE_PREFIX = 'venice-local-cache';
+  const cleanCachesAndWorkers = async () => {
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(k => k.startsWith(CACHE_PREFIX)).map(k => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch (err) {
+      console.warn('Service worker cleanup failed.', err.message);
+    }
+  };
+
+  cleanCachesAndWorkers();
+});
+
+
+===== preload.js =====
+// Preload kept minimal for prototype; renderer uses standard browser APIs and localStorage.
+// If we needed to expose selective Node APIs to the renderer, we'd attach them here.
+window.addEventListener('DOMContentLoaded', () => {
+  // Reserved for exposing safe APIs to the renderer if needed later.
+});
+
+
+===== service-worker.js =====
+// Basic offline handler for static assets (kept lean for this prototype).
+// We aggressively bypass Supabase calls to ensure live auth/token flow.
+const CACHE_NAME = 'venice-local-cache-v4';
+const OFFLINE_ASSETS = [
+  './',
+  './index.html',
+  './styles.css',
+  './renderer.js',
+  './preload.js',
+  './manifest.json',
+  './assets/venice-local.png',
+  './assets/Default_pfp.svg.png',
+  './assets/downtown-venice.webp'
+];
+
+// Cache core assets during install so the shell can load offline.
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_ASSETS))
+  );
+});
+
+// Remove outdated caches when a new worker activates.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+          return null;
+        })
+      )
+    )
+  );
+});
+
+// Serve cached assets when possible; always bypass cache for Supabase calls.
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+
+  // Never cache Supabase/API calls; always hit network so auth headers work.
+  const url = new URL(request.url);
+  if (url.hostname.includes('supabase.co')) {
+    event.respondWith(fetch(request).catch(() => Response.error()));
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match('./index.html'));
+    })
+  );
+});
+
+
+===== styles.css =====
+/* Theme tokens for colors, fonts, and common radii/shadows */
+:root {
+  --bg: #f5f0e6;
+  --bg-2: #e9e1d5;
+  --accent-light: #cfded7;
+  --accent: #2c8c90;
+  --primary: #f27c57;
+  --nav: #175f62;
+  --text: #1f2a2c;
+  --radius: 12px;
+  --shadow: 0 14px 32px rgba(23, 95, 98, 0.14);
+  --shadow-soft: 0 8px 20px rgba(23, 95, 98, 0.18);
+  font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Base resets and typography */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+h1, h2, h3 {
+  font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0.3px;
+}
+
+.screen { min-height: 100vh; }
+.hidden { display: none !important; }
+.animate-in { animation: fadeSlideUp 320ms ease; }
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero/auth screen layout */
+#auth-screen {
+  background:
+    linear-gradient(180deg, rgba(245, 240, 230, 0.7) 45%, rgba(245, 240, 230, 0.55) 75%, rgba(245, 240, 230, 0.7)),
+    var(--auth-bg-image, none);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+/* Auth layout: intro/brand on left, forms on right */
+.auth-container {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 24px;
+  padding: 48px 64px;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: stretch;
+}
+
+/* Branded hero card */
+.auth-intro {
+  background: var(--nav);
+  color: #fff;
+  padding: 32px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Logo/brand treatment shared between auth and topbar */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  font-size: 22px;
+  font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1;
+}
+.brand-logo-wrap {
+  background: #fff;
+  border-radius: 50%;
+  padding: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+.brand img {
+  height: 86px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+}
+.topbar .brand { padding: 4px 0; }
+.auth-intro .brand { color: #fff; margin-bottom: 8px; }
+
+.auth-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  animation: floatGlow 3.6s ease-in-out infinite alternate;
+}
+.auth-logo img {
+  height: 110px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.4));
+}
+
+.auth-logo:hover {
+  animation-play-state: paused;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes floatGlow {
+  from { transform: translateY(0px) scale(1); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22); }
+  to { transform: translateY(-8px) scale(1.03); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28); }
+}
+
+@media (max-width: 640px) {
+  .brand img { height: 70px; }
+}
+
+.auth-intro .muted {
+  color: #e6f2f4;
+}
+
+.auth-intro .ghost-btn {
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-intro .ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.auth-intro h1 { margin-top: 0; font-size: 38px; letter-spacing: 0.5px; }
+.feature-list { padding-left: 20px; }
+.feature-list li { margin-bottom: 8px; color: #f3fbf9; }
+
+.auth-forms { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.choice-buttons { display: grid; gap: 10px; }
+.auth-forms form { display: grid; gap: 14px; }
+
+/* Reusable card container styling */
+.card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(23, 95, 98, 0.1);
+}
+
+.card h2 { margin-top: 0; }
+
+/* Form controls */
+label { display: block; font-weight: 600; margin: 10px 0 4px; }
+label input, label select, label textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-light);
+  background: #fff;
+  color: var(--text);
+  margin-top: 6px;
+}
+
+label input::placeholder,
+label textarea::placeholder {
+  color: #3a4a50;
+}
+
+textarea { resize: vertical; }
+
+/* Primary button styles */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  transition: transform 0.14s ease, box-shadow 0.25s ease, background-color 0.2s ease, filter 0.2s ease;
+  color: #fff;
+  box-shadow: var(--shadow-soft);
+}
+
+button:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset: 2px; }
+
+.primary-btn { background: var(--primary); }
+.secondary-btn { background: var(--accent); color: #fff; }
+.ghost-btn { background: transparent; color: var(--nav); border: 1px solid var(--nav); }
+
+#signup-form .primary-btn,
+#signin-form .secondary-btn {
+  margin-top: 8px;
+}
+
+.link-btn {
+  background: transparent;
+  color: var(--nav);
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  text-decoration: underline;
+  width: fit-content;
+}
+.link-btn:hover { transform: none; box-shadow: none; }
+
+/* App shell header */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 24px;
+  background: var(--nav);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  box-shadow: var(--shadow);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.nav-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.nav-btn {
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 14px;
+}
+.nav-btn:hover { background: var(--primary); box-shadow: var(--shadow); transform: translateY(-1px); }
+.profile-actions { display: flex; align-items: center; gap: 10px; }
+.profile-actions .nav-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+}
+.profile-actions .nav-btn:hover { background: rgba(255, 255, 255, 0.12); box-shadow: none; }
+.avatar-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0;
+  cursor: pointer;
+}
+.avatar-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Main content layout and business grid */
+.content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.filters { margin-bottom: 16px; }
+.filter-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end; }
+.filters #role-note { margin-top: 10px; display: block; }
+
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.business-card h3 { margin: 0 0 4px; }
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+
+.business-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.business-photo {
+  margin-bottom: 10px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #dfe8e1;
+}
+.business-photo img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+}
+.business-card .card-footer {
+  margin-top: auto;
+  padding-top: 12px;
+}
+.business-card .description {
+  min-height: 54px;
+}
+
+/* Badges and helper text */
+.rating-chip {
+  background: var(--nav);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.rating-chip .star {
+  font-size: 14px;
+  line-height: 1;
+}
+.deal-pill { background: var(--bg-2); padding: 6px 10px; border-radius: 999px; color: var(--accent); font-weight: 700; }
+
+.empty-text { text-align: center; color: var(--accent); padding: 20px 0; }
+.muted { color: #55605d; }
+.error { color: #b23b3b; min-height: 18px; font-size: 14px; margin: 6px 0 0; }
+.success { color: #1a6f46; min-height: 18px; font-size: 14px; margin: 6px 0 0; }
+
+/* Owner dashboard panels */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  text-align: left;
+}
+.stat-card h3 {
+  font-size: 32px;
+  margin-top: 6px;
+}
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Detail modal content */
+.detail-photo img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 12px 0;
+  display: block;
+}
+
+.review-photo {
+  margin-top: 8px;
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+/* Form helpers for uploads and toggles */
+.photo-inputs {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed var(--bg-2);
+  border-radius: 12px;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  margin: 8px 0;
+  font-weight: 600;
+}
+.checkbox-inline input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.checkbox-inline span { white-space: nowrap; }
+
+/* Owner list and actions */
+.dashboard-header .small { margin-top: 2px; }
+.owner-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.owner-card {
+  border: 1px solid rgba(23, 95, 98, 0.08);
+  padding: 14px;
+  border-radius: 10px;
+  background: #fdfcf9;
+}
+.owner-card h4 { margin: 0 0 4px; }
+.owner-card .meta { color: #3c4f55; font-size: 14px; margin: 4px 0; }
+.owner-card .deal { font-weight: 600; margin: 6px 0 8px; color: var(--nav); }
+.owner-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.section-header { margin: 10px 0 16px; }
+.form-card form button { margin-top: 14px; }
+
+/* Modal overlay for business details */
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(23, 95, 98, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 160px 20px 40px; /* extra top clearance for nav, lighter bottom gap */
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 24px;
+  width: min(800px, 100%);
+  position: relative;
+  max-height: calc(100vh - 200px); /* account for modal padding so content never touches edges */
+  overflow-y: auto;
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .modal {
+    padding: 130px 12px 40px;
+  }
+  .modal-content {
+    max-height: calc(100vh - 170px);
+  }
+}
+
+/* Detail summary stats and review list */
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  color: var(--accent);
+  width: auto;
+  height: auto;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 24px;
+}
+
+.detail-header { display: flex; justify-content: space-between; gap: 10px; }
+.rating-large {
+  background: var(--nav);
+  color: #fff;
+  width: 118px;
+  height: 118px;
+  min-width: 118px;
+  min-height: 118px;
+  flex: 0 0 118px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 0.9;
+  font-variant-numeric: tabular-nums;
+  align-self: flex-start;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  margin: 52px 10px 0 0;
+  font-size: 42px;
+}
+.rating-large .star {
+  display: none;
+}
+.deal-banner { background: var(--bg-2); padding: 12px; border-radius: var(--radius); margin: 12px 0; font-weight: 700; color: var(--nav); }
+.reviews { display: grid; gap: 12px; }
+.review { background: var(--bg); padding: 10px 12px; border-radius: var(--radius); }
+.review-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.review-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid var(--bg-2); flex-shrink: 0; background: #fff; }
+.review .review-rating { margin-top: 4px; display: inline-block; font-weight: 700; }
+.review-meta { line-height: 1.2; }
+.review-form {
+  margin-top: 16px;
+  border-top: 1px solid var(--bg-2);
+  padding-top: 14px;
+  display: grid;
+  gap: 10px; /* consistent breathing room between fields */
+}
+.review-form button { margin-top: 10px; }
+.detail-actions { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+
+/* Profile drawer styling */
+.profile-avatar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.profile-avatar h2 { margin: 0 0 4px; }
+.profile-avatar .muted { margin: 0; }
+.avatar-frame {
+  width: 96px;
+  height: 96px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid var(--accent);
+  background: var(--bg-2);
+}
+.avatar-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.profile-photo-form {
+  margin: 12px 0;
+  display: grid;
+  gap: 10px;
+}
+
+/* Simple human verification block styling */
+.verification {
+  background: #f2ebdf;
+  padding: 12px;
+  border-radius: var(--radius);
+  margin: 10px 0 4px;
+  display: grid;
+  gap: 10px;
+}
+
+.verification label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.verification .challenge-label {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.verification input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+/* Responsive tweaks */
+@media (max-width: 960px) {
+  .auth-container { grid-template-columns: 1fr; padding: 32px; }
+  .nav-actions { width: 100%; justify-content: space-between; }
+  .detail-header { flex-direction: column; align-items: flex-start; }
+}
+
+
+===== supabaseClient.js =====
+// Central Supabase client used by both auth + data helpers in renderer.js.
+// These demo keys are safe for a hackathon prototype; rotate for production.
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = 'https://rysbzmizspfuacnjgvfm.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5c2J6bWl6c3BmdWFjbmpndmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzOTg4ODAsImV4cCI6MjA4MDk3NDg4MH0.vaOqAerIqNvreFi2MIDiEgW0Ci348R6b9qtzbYZsh4s';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: { fetch: (...args) => window.fetch(...args) }
+});
+
+// Helpful debug so anyone can verify which project the app is talking to.
+console.log('SUPABASE_URL in use:', SUPABASE_URL);
+console.log('SUPABASE_ANON_KEY ends with:', SUPABASE_ANON_KEY.slice(-6));
+
+module.exports = { supabase, SUPABASE_URL, SUPABASE_ANON_KEY };
+
+
+===== manifest.json =====
+{
+  "name": "Venice Local",
+  "short_name": "VeniceLocal",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f0e6",
+  "theme_color": "#175f62",
+  "icons": [
+    {
+      "src": "./assets/venice-local.png",
+      "sizes": "500x500",
+      "type": "image/png"
+    }
+  ]
+}
+
+
+===== package.json =====
+{
+  "name": "venice-local",
+  "version": "1.0.0",
+  "description": "Venice Local - FBLA Byte-Sized Business Boost desktop prototype built with Electron.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "author": "FBLA Venice Local",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.87.1"
+  },
+  "devDependencies": {
+    "electron": "^30.0.9",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.fbla.venicelocal",
+    "productName": "Venice Local",
+    "artifactName": "${productName} Setup ${version}.${ext}",
+    "directories": {
+      "buildResources": "assets"
+    },
+    "files": [
+      "**/*",
+      "!dist{,/**}",
+      "assets/**"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": ["dmg", "zip"]
+    }
+  }
+}
+
+
+
+===== README.md =====
+# Venice Local
+
+![Venice Local logo](assets/Copy%20of%20Venice%20Local.png)
+
+Welcome to Venice Local! This is our 2025-2026 FBLA Coding & Programming Project. Venice Local is a desktop application designed to help users discover and support small, local businesses in Venice, Florida.
+
+Local business owners can add their businesses to the app, and community members can browse listings, leave reviews, and save their favorite places. If a business is offering a special deal or promotion, it will be displayed on the business's listing. The app uses a backend created with Supabase to securely store business listings, reviews, and user data so information is saved and updated in real time. The goal of this project is to strengthen the local community by making it easier for people to find and support nearby businesses. All business entries represent real small local businesses in Downtown Venice, FL, and details (hours, descriptions, addresses, photos, etc.) were gathered from TripAdvisor and Yelp.
+
+---
+
+## Key Features
+- Search and filter businesses by name and category, with sorting by rating, review count, or name.
+- Detailed profiles with hours, description, address, category, special deals, and live average ratings.
+- Reviews: leave 1-5 star ratings with comments and optional photos; see community feedback in real time.
+- Favorites: save and manage a personal list of favorite businesses for quick access.
+- Deals: highlight active specials and show deal counts for business owners.
+- Roles: guest browsing, customer reviews/favorites, and business owner tools to add or edit listings.
+
+---
+
+## Get the Project
+- GitHub: https://github.com/koreenahickey-cmd/Venice-Local.git (Code -> Download ZIP) or `git clone (https://github.com/koreenahickey-cmd/Venice-Local.git)`
+- Make sure Node.js 18+ is installed (macOS: `brew install node`, Windows: download from nodejs.org).
+
+## Open and Run (source code)
+1) Download or clone the repo, then open Terminal or PowerShell in the project folder.  
+2) Install dependencies once: `npm install`.  
+3) Launch the app from source: `npm start`. Electron opens a Venice Local window using the local code.
+
+## Build an Installer/App
+1) Complete steps 1-2 above.  
+2) Build a packaged app: `npm run dist` (creates output in `dist/`).  
+3) macOS: open the `.dmg` in `dist`, then drag Venice Local into Applications.  
+4) Windows: run the `.exe` in `dist` and follow the installer prompts.  
+5) After installation, open Venice Local like a normal app; no terminal needed.
+
+---
+
+## Project Structure (key files)
+```
+Venice-Local/
+- assets/                 # images and static assets
+- dist/                   # packaged builds (created by npm run dist)
+- index.html              # main app HTML
+- main.js                 # Electron main process
+- renderer.js             # renderer process logic
+- preload.js              # context bridge configuration
+- supabaseClient.js       # Supabase client setup
+- styles.css              # global styles
+- service-worker.js       # PWA/offline support
+- manifest.json           # app metadata
+- package.json            # scripts and dependencies
+- package-lock.json       # lockfile
+```
+
+---
+
+## Directions to Use
+To use Venice Local, launch the application and browse through local businesses listed in Venice, FL. Users can explore businesses by category, view details, leave reviews, and bookmark their favorite businesses for easy access later. Business owners can also submit their own businesses to be featured in the app.
+
+---
+
+## Developers
+Koreena Hickey  
+Emma Nguyen  
+
+---
+
+## Default Accounts
+- Business owner - email: `businessowner@gmail.com`, password: `FBLA2025`  
+- Reviewer - email: `reviewer@gmail.com`, password: `FBLA2025`
+
+---
+
+## Software & Languages Used
+Visual Studio Code  
+GitHub  
+Adobe Photoshop  
+Supabase  
+JavaScript  
+HTML  
+CSS  
+
+---
+
+## Credits
+App logo created by Emma Nguyen.  
+Typography: Copasetic font by Font Diner (sourced from DaFont).
+
+---
+
+## Contact
+For any questions please email emmanguyen0915@gmail.com!
+
+
+===== LICENSE =====
+MIT License
+
+Copyright (c) 2025 koreenahickey-cmd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
