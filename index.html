@@ -10,79 +10,89 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <!-- Authentication flow (signup/signin/guest) -->
   <div id="auth-screen" class="screen">
     <div class="auth-container">
-      <div class="auth-intro">
-        <!-- Left column highlights what the app does -->
-        <div class="auth-logo" aria-label="Venice Local">
-          <img class="veniceLogo" alt="Venice Local logo">
-          <span class="sr-only">Venice Local</span>
+      <div class="auth-card">
+        <div class="auth-hero">
+          <div class="auth-logo" aria-label="Venice Local">
+            <img class="veniceLogo" alt="Venice Local logo">
+            <span class="sr-only">Venice Local</span>
+          </div>
+          <h1>Venice Local</h1>
+          <p class="muted">Discover and support small businesses in downtown Venice, Florida.</p>
+          <p class="muted">Sign in to review, save favorites, and find deals—or browse as a guest.</p>
         </div>
-        <h1>Venice Local</h1>
-        <p class="muted">Discover and support small businesses in downtown Venice, Florida. Sign in to review, save favorite businesses, and discover deals.</p>
-        <ul class="feature-list">
-          <li>Find local gems by category and rating</li>
-          <li>Leave trusted reviews with human verification</li>
-          <li>Save favorites and redeem hometown deals</li>
-        </ul>
-      </div>
-      <div class="auth-forms">
-        <div class="card" id="auth-choice-card">
-          <!-- Simple chooser that leads to either sign up or sign in; guest is allowed too -->
-          <h2>Get started with Venice Local!</h2>
-          <p class="muted">You can browse as a guest or create an account/sign in to save favorites and post reviews.</p>
-          <div class="choice-buttons">
-            <button id="start-create-btn" class="primary-btn">Create Account</button>
-            <button id="start-signin-btn" class="secondary-btn">Sign In</button>
-            <button id="guest-btn" class="ghost-btn">Continue as Guest</button>
+
+        <div class="auth-forms">
+          <div class="card" id="auth-choice-card">
+            <h2>Welcome</h2>
+            <p class="muted">Pick how you want to start.</p>
+            <div class="choice-buttons">
+              <button id="start-create-btn" class="primary-btn">Create Account</button>
+              <button id="start-signin-btn" class="secondary-btn">Sign In</button>
+              <button id="guest-btn" class="ghost-btn">Continue as Guest</button>
+            </div>
+          </div>
+          <div class="card hidden" id="signup-card">
+            <h2>Create Account</h2>
+            <form id="signup-form">
+              <label>Display Name<input type="text" id="signup-name" required></label>
+              <label>Email<input type="email" id="signup-email" required></label>
+              <label>Password<input type="password" id="signup-password" required></label>
+              <label>Profile Picture (URL)<input type="url" id="signup-avatar" placeholder="https://example.com/photo.jpg"></label>
+            <label>Profile Picture (Upload)<input type="file" id="signup-avatar-file" accept="image/*"></label>
+              <label>Role
+                <select id="signup-role" required>
+                  <option value="">Select role</option>
+                  <option value="owner">Business Owner</option>
+                  <option value="patron">Local Customer</option>
+                </select>
+              </label>
+            <div class="turnstile-wrapper">
+              <div class="cf-turnstile" data-sitekey="0x4AAAAAACYODhf1mG9Z8s6M" data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"></div>
+              <input type="hidden" id="turnstile-token">
+            </div>
+              <button type="submit" class="primary-btn">Create Account</button>
+              <p class="error" id="signup-error"></p>
+              <button type="button" class="link-btn" data-auth-back>← Back to options</button>
+            </form>
+          </div>
+          <div class="card hidden" id="signin-card">
+            <h2>Sign In</h2>
+            <form id="signin-form">
+              <label>Email<input type="email" id="signin-email" required></label>
+              <label>Password<input type="password" id="signin-password" required></label>
+              <div class="turnstile-wrapper">
+                <div class="cf-turnstile" data-sitekey="0x4AAAAAACYODhf1mG9Z8s6M" data-callback="onTurnstileSignin" data-expired-callback="onTurnstileSigninExpired"></div>
+                <input type="hidden" id="signin-turnstile-token">
+              </div>
+              <button type="submit" class="secondary-btn">Sign In</button>
+              <p class="error" id="signin-error"></p>
+              <button type="button" class="link-btn" data-auth-back>← Back to options</button>
+            </form>
           </div>
         </div>
-        <div class="card hidden" id="signup-card">
-          <!-- Signup collects a few extra fields to keep the demo human-friendly -->
-          <h2>Create Account</h2>
-          <form id="signup-form">
-            <label>Display Name<input type="text" id="signup-name" required></label>
-            <label>Email<input type="email" id="signup-email" required></label>
-            <label>Password<input type="password" id="signup-password" required></label>
-            <label>Profile Picture (URL)<input type="url" id="signup-avatar" placeholder="https://example.com/photo.jpg"></label>
-            <label>Profile Picture (Upload)<input type="file" id="signup-avatar-file" accept="image/*"></label>
-            <label>Role
-              <select id="signup-role" required>
-                <option value="">Select role</option>
-                <option value="owner">Business Owner</option>
-                <option value="patron">Local Customer</option>
-              </select>
-            </label>
-            <div class="verification">
-              <label><input type="checkbox" id="signup-human"> I'm not a robot</label>
-              <label class="challenge-label">
-                <span>Type the word: <strong>VENICE</strong></span>
-                <input type="text" id="signup-challenge" placeholder="VENICE" required>
-              </label>
-            </div>
-            <button type="submit" class="primary-btn">Create Account</button>
-            <p class="error" id="signup-error"></p>
-            <button type="button" class="link-btn" data-auth-back>← Back to options</button>
-          </form>
+      </div>
+    </div>
+    <button id="help-btn" class="instructions-launch">Help</button>
+    <div id="help-panel" class="instructions-panel hidden">
+      <div class="instructions-card">
+        <div class="instructions-header">
+          <h3>Help & Tips</h3>
+          <button id="help-close" class="ghost-btn small">Close</button>
         </div>
-        <div class="card hidden" id="signin-card">
-          <!-- Sign-in has a tiny math check to discourage bots -->
-          <h2>Sign In</h2>
-          <form id="signin-form">
-            <label>Email<input type="email" id="signin-email" required></label>
-            <label>Password<input type="password" id="signin-password" required></label>
-            <label>What is 2 + 3? (bot check)
-              <input type="number" id="signin-math" placeholder="5" required>
-            </label>
-            <button type="submit" class="secondary-btn">Sign In</button>
-            <p class="error" id="signin-error"></p>
-            <button type="button" class="link-btn" data-auth-back>← Back to options</button>
-          </form>
-        </div>
+        <ol>
+          <li>Create an account or sign in to save favorites and post reviews. Guests can browse only.</li>
+          <li>Browse businesses, filter by category, sort by rating/reviews, and open Details to see full info.</li>
+          <li>Tap the heart “Save” to favorite a business; it turns orange when saved.</li>
+          <li>Owners can add or edit their own businesses from the Owner Dashboard.</li>
+          <li>Use the deals pill to spot current specials. Add a clear storefront photo for best results.</li>
+        </ol>
       </div>
     </div>
   </div>

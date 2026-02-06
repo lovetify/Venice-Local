@@ -221,6 +221,24 @@ function applyStaticAssets() {
   document.documentElement.style.setProperty('--auth-bg-image', `url('${BACKGROUND_IMAGE}')`);
 }
 
+// Cloudflare Turnstile callbacks
+window.onTurnstileSuccess = (token) => {
+  const input = document.getElementById('turnstile-token');
+  if (input) input.value = token;
+};
+window.onTurnstileExpired = () => {
+  const input = document.getElementById('turnstile-token');
+  if (input) input.value = '';
+};
+window.onTurnstileSignin = (token) => {
+  const input = document.getElementById('signin-turnstile-token');
+  if (input) input.value = token;
+};
+window.onTurnstileSigninExpired = () => {
+  const input = document.getElementById('signin-turnstile-token');
+  if (input) input.value = '';
+};
+
 function setView(target) {
   // Toggle between main app sections and optionally refresh owner data.
   const sections = document.querySelectorAll('.view-section');
@@ -509,8 +527,7 @@ async function signUp(event) {
   const avatarUrl = document.getElementById('signup-avatar').value.trim();
   const avatarFile = document.getElementById('signup-avatar-file').files[0];
   const role = document.getElementById('signup-role').value;
-  const humanCheck = document.getElementById('signup-human').checked;
-  const challenge = document.getElementById('signup-challenge').value.trim().toUpperCase();
+  const turnstileToken = document.getElementById('turnstile-token')?.value || '';
   const errorEl = document.getElementById('signup-error');
   errorEl.textContent = '';
 
@@ -518,8 +535,8 @@ async function signUp(event) {
     errorEl.textContent = 'Please fill every field and choose a role.';
     return;
   }
-  if (!humanCheck || challenge !== 'VENICE') {
-    errorEl.textContent = 'Verification failed. Please confirm you are human and type VENICE.';
+  if (!turnstileToken) {
+    errorEl.textContent = 'Please complete the bot check.';
     return;
   }
   try {
@@ -552,12 +569,12 @@ async function signIn(event) {
   event.preventDefault();
   const email = document.getElementById('signin-email').value.trim().toLowerCase();
   const password = document.getElementById('signin-password').value.trim();
-  const math = Number(document.getElementById('signin-math').value);
+  const turnstileToken = document.getElementById('signin-turnstile-token')?.value || '';
   const errorEl = document.getElementById('signin-error');
   errorEl.textContent = '';
 
-  if (math !== 5) {
-    errorEl.textContent = 'Bot check failed. 2 + 3 should equal 5.';
+  if (!turnstileToken) {
+    errorEl.textContent = 'Please complete the bot check.';
     return;
   }
 
@@ -1039,6 +1056,7 @@ window.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   showAuthCard('choice');
   applyStaticAssets();
+  setupHelpToggle();
   initSession();
 
   // Disable SW caching; just clean up any old workers/caches so Supabase calls are always live in npm start, dmg, and zip.
@@ -1060,3 +1078,17 @@ window.addEventListener('DOMContentLoaded', () => {
 
   cleanCachesAndWorkers();
 });
+
+function setupHelpToggle() {
+  const openBtn = document.getElementById('help-btn');
+  const panel = document.getElementById('help-panel');
+  const closeBtn = document.getElementById('help-close');
+  if (!openBtn || !panel || !closeBtn) return;
+  const open = () => panel.classList.remove('hidden');
+  const close = () => panel.classList.add('hidden');
+  openBtn.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  panel.addEventListener('click', (e) => {
+    if (e.target === panel) close();
+  });
+}
