@@ -20,15 +20,11 @@ Local business owners can add their businesses to the app, and community members
 
 ## Get the Project
 - GitHub: https://github.com/koreenahickey-cmd/Venice-Local.git (Code -> Download ZIP) or `git clone (https://github.com/koreenahickey-cmd/Venice-Local.git)`
-- No npm install needed for the browser demo—the Supabase SDK is already vendored in `assets/vendor/supabase.js`.
 
 ## Open and Run (browser)
 1) Download or clone the repo, then open Terminal or PowerShell in the project folder.  
 2) Launch a static server: `python3 -m http.server 4173` (or `py -m http.server 4173` on Windows).  
 3) Open `http://localhost:4173/` in your browser. That’s it—no build step or install required.
-
-## Build an Installer/App
-Electron packaging is not used for the competition handoff; run in the browser as above.
 
 ---
 
