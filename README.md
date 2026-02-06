@@ -24,7 +24,7 @@ Local business owners can add their businesses to the app, and community members
 ## Open and Run (browser)
 1) Download or clone the repo, then open Terminal or PowerShell in the project folder.  
 2) Launch a static server: `python3 -m http.server 4173` (or `py -m http.server 4173` on Windows).  
-3) Open `http://localhost:4173/` in your browser. That’s it—no build step or install required.
+3) Open `http://localhost:4173/` in your browser.
 
 ---
 
