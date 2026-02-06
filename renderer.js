@@ -691,11 +691,18 @@ function reviewFormTemplate(id) {
   // Lightweight template for the review form.
   return `
     <form class="review-form" data-review="${id}">
-      <label>Rating (1-5)<input type="number" min="1" max="5" required></label>
+      <div class="rating-row" aria-label="Select a rating">
+        <span class="rating-label">Rating</span>
+        <div class="star-input" role="radiogroup">
+          ${[5,4,3,2,1].map(n => `
+            <input type="radio" id="star-${id}-${n}" name="rating-${id}" value="${n}">
+            <label for="star-${id}-${n}" title="${n} star${n>1?'s':''}" aria-label="${n} star${n>1?'s':''}">★</label>
+          `).join('')}
+        </div>
+      </div>
       <label>Comment<textarea rows="2" required></textarea></label>
       <label>Photo (URL, optional)<input type="url" class="review-photo-url" placeholder="https://example.com/photo.jpg"></label>
       <label>Photo (Upload, optional)<input type="file" class="review-photo-file" accept="image/*"></label>
-      <label>Type the word LOCAL to verify<input type="text" placeholder="LOCAL" required></label>
       <button type="submit" class="primary-btn">Submit Review</button>
       <p class="error form-error"></p>
     </form>
@@ -711,17 +718,15 @@ function closeDetail() {
 async function submitReview(form) {
   // Validate and submit a new review, handling optional photo uploads.
   const bizId = form.getAttribute('data-review');
-  const ratingInput = form.querySelector('input[type="number"]');
+  const ratingInput = form.querySelector('input[name^="rating-"]:checked');
   const commentInput = form.querySelector('textarea');
-  const verifyInput = form.querySelector('input[type="text"]');
   const photoUrlInput = form.querySelector('.review-photo-url');
   const photoFileInput = form.querySelector('.review-photo-file');
   const errorEl = form.querySelector('.form-error');
   errorEl.textContent = '';
 
-  const rating = Number(ratingInput.value);
+  const rating = ratingInput ? Number(ratingInput.value) : 0;
   const comment = commentInput.value.trim();
-  const verify = verifyInput.value.trim().toUpperCase();
   const photoUrl = photoUrlInput ? photoUrlInput.value.trim() : '';
   const photoFile = photoFileInput ? photoFileInput.files[0] : null;
 
@@ -731,10 +736,6 @@ async function submitReview(form) {
   }
   if (!comment) {
     errorEl.textContent = 'Please add a short comment.';
-    return;
-  }
-  if (verify !== 'LOCAL') {
-    errorEl.textContent = 'Verification failed. Type LOCAL to confirm you are human.';
     return;
   }
 

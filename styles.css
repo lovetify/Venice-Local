@@ -53,9 +53,7 @@ h1, h2, h3 {
 /* Hero/auth screen layout */
 #auth-screen {
   background:
-    radial-gradient(circle at 15% 20%, rgba(255,255,255,0.10), transparent 32%),
-    radial-gradient(circle at 85% 10%, rgba(44,140,144,0.28), transparent 28%),
-    linear-gradient(180deg, rgba(10,26,34,0.82), rgba(15,38,48,0.78) 55%, rgba(10,26,34,0.82)),
+    linear-gradient(180deg, rgba(10,26,34,0.58), rgba(10,26,34,0.58)),
     var(--auth-bg-image, url('assets/downtown-venice.webp'));
   background-repeat: no-repeat;
   background-position: center;
@@ -75,13 +73,13 @@ h1, h2, h3 {
 }
 
 .auth-card {
-  width: min(520px, 100%);
-  background: var(--panel-dark);
-  color: #f8fdff;
+  width: min(720px, 100%);
+  background: #f5f0e6;
+  color: #1f2a2c;
   border-radius: 20px;
   padding: 24px 22px 26px;
   box-shadow: var(--shadow);
-  border: 1px solid rgba(23, 95, 98, 0.12);
+  border: 2px solid var(--accent);
   display: grid;
   gap: 12px;
   text-align: center;
@@ -95,11 +93,14 @@ h1, h2, h3 {
   justify-items: center;
 }
 
-.auth-hero h1 { color: #fefefe; margin: 6px 0 2px; letter-spacing: 0.4px; }
-.auth-hero p { margin: 0; color: #cfe6ea; }
+.auth-hero h1 { color: #1f2a2c; margin: 6px 0 2px; letter-spacing: 0.4px; }
+.auth-hero p { margin: 0; color: #3e4b4c; }
 
 .auth-hero .auth-logo {
   margin: 0;
+  background: #12333c;
+  border: 1px solid #1f5b61;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.22);
 }
 
 /* Logo/brand treatment shared between auth and topbar */
@@ -207,11 +208,11 @@ h1, h2, h3 {
 }
 
 .auth-card .card {
-  background: #12333c;
-  color: #f7fbff;
-  border: 1px solid #1f5b61;
+  background: #ffffff;
+  color: #1f2a2c;
+  border: 1px solid rgba(23, 95, 98, 0.18);
 }
-.auth-card .muted { color: #cfe6ea; }
+.auth-card .muted { color: #4d5a57; }
 
 /* Reusable card container styling */
 .card {
@@ -230,15 +231,15 @@ label input, label select, label textarea {
   width: 100%;
   padding: 9px 11px;
   border-radius: 10px;
-  border: 1px solid #1f5b61;
-  background: #0c2730;
-  color: #f4fbff;
+  border: 1px solid #cfded7;
+  background: #ffffff;
+  color: #1f2a2c;
   margin-top: 6px;
 }
 
 label input::placeholder,
 label textarea::placeholder {
-  color: #a2c8cf;
+  color: #506268;
 }
 
 textarea { resize: vertical; }
@@ -614,6 +615,45 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   display: grid;
   gap: 10px; /* consistent breathing room between fields */
 }
+.rating-row {
+  display: grid;
+  gap: 4px;
+  align-items: center;
+  justify-items: center;
+}
+.rating-label {
+  font-weight: 800;
+  color: var(--nav);
+  letter-spacing: 0.2px;
+  font-size: 18px;
+}
+.star-input {
+  display: inline-flex;
+  flex-direction: row-reverse; /* highest star first for easy hover fill */
+  gap: 6px;
+}
+.star-input input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.star-input label {
+  font-size: 84px;
+  color: #4c5f64;
+  cursor: pointer;
+  transition: transform 0.1s ease, color 0.15s ease;
+}
+.star-input label:hover,
+.star-input label:hover ~ label {
+  color: #f6c768;
+}
+.star-input input:checked ~ label,
+.star-input input:checked + label,
+.star-input input:checked ~ label {
+  color: #f6c768;
+}
+.star-input label:active { transform: scale(0.95); }
 .review-form button { margin-top: 10px; }
 .detail-actions { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 
