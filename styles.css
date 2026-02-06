@@ -212,6 +212,9 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 .primary-btn { background: var(--primary); }
 .secondary-btn { background: var(--accent); color: #fff; }
 .ghost-btn { background: transparent; color: var(--nav); border: 1px solid var(--nav); }
+.fav-btn { background: var(--accent); }
+.fav-btn.saved { background: #e0563a; color: #fff; border: 1px solid #d64b30; }
+.fav-btn.saved:hover { filter: brightness(1.05); }
 
 #signup-form .primary-btn,
 #signin-form .secondary-btn {

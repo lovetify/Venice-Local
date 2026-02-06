@@ -20,19 +20,15 @@ Local business owners can add their businesses to the app, and community members
 
 ## Get the Project
 - GitHub: https://github.com/koreenahickey-cmd/Venice-Local.git (Code -> Download ZIP) or `git clone (https://github.com/koreenahickey-cmd/Venice-Local.git)`
-- Make sure Node.js 18+ is installed (macOS: `brew install node`, Windows: download from nodejs.org).
+- No npm install needed for the browser demo—the Supabase SDK is already vendored in `assets/vendor/supabase.js`.
 
-## Open and Run (source code)
+## Open and Run (browser)
 1) Download or clone the repo, then open Terminal or PowerShell in the project folder.  
-2) Install dependencies once: `npm install`.  
-3) Launch the app from source: `npm start`. Electron opens a Venice Local window using the local code.
+2) Launch a static server: `python3 -m http.server 4173` (or `py -m http.server 4173` on Windows).  
+3) Open `http://localhost:4173/` in your browser. That’s it—no build step or install required.
 
 ## Build an Installer/App
-1) Complete steps 1-2 above.  
-2) Build a packaged app: `npm run dist` (creates output in `dist/`).  
-3) macOS: open the `.dmg` in `dist`, then drag Venice Local into Applications.  
-4) Windows: run the `.exe` in `dist` and follow the installer prompts.  
-5) After installation, open Venice Local like a normal app; no terminal needed.
+Electron packaging is not used for the competition handoff; run in the browser as above.
 
 ---
 

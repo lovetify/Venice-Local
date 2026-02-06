@@ -1,0 +1,13 @@
+{
+  "name": "venice-local",
+  "version": "1.0.0",
+  "description": "Venice Local - FBLA Byte-Sized Business Boost browser demo.",
+  "scripts": {
+    "start": "python3 -m http.server 4173",
+    "web": "python3 -m http.server 4173"
+  },
+  "author": "FBLA Venice Local",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

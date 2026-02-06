@@ -400,7 +400,9 @@ function renderFavoriteButton(businessId) {
   // Build a save/unsave button for the given business.
   if (!currentUser || currentUser.role === 'guest') return '';
   const saved = favorites[currentUser.id]?.includes(businessId);
-  return `<button class="secondary-btn" data-fav="${businessId}">${saved ? '♡ Saved' : '♡ Save'}</button>`;
+  const savedClass = saved ? ' saved' : '';
+  const label = saved ? '♥ Saved' : '♡ Save';
+  return `<button class="secondary-btn fav-btn${savedClass}" data-fav="${businessId}">${label}</button>`;
 }
 
 function renderFavoritesView() {
@@ -431,7 +433,7 @@ function renderFavoritesView() {
       <div class="card-footer">
         ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
         <div>
-          <button class="secondary-btn" data-fav="${biz.id}">♡ Saved</button>
+          <button class="secondary-btn fav-btn saved" data-fav="${biz.id}">♥ Saved</button>
           <button class="ghost-btn" data-detail="${biz.id}">Details</button>
         </div>
       </div>

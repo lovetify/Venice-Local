@@ -1,7 +1,10 @@
 // Central Supabase client used by both auth + data helpers in renderer.js.
 // These demo keys are safe for a hackathon prototype; rotate for production.
-// Use the local UMD bundle so it runs in the browser without external CDNs or bundlers.
-import './node_modules/@supabase/supabase-js/dist/umd/supabase.js';
+// Supabase UMD is loaded globally via <script src="assets/vendor/supabase.js"> in index.html.
+// Ensure it exists before we try to use it.
+if (!window.supabase) {
+  throw new Error('Supabase SDK not loaded. Check assets/vendor/supabase.js script tag.');
+}
 const { createClient } = window.supabase;
 
 export const SUPABASE_URL = 'https://rysbzmizspfuacnjgvfm.supabase.co';
