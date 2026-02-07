@@ -10,6 +10,7 @@ const DEFAULT_AVATAR = assetUrl('Default_pfp.svg.png');
 const BACKGROUND_IMAGE = assetUrl('downtown-venice.webp');
 const STORAGE_BUCKET = 'business-media';
 const BUSINESS_PHOTO_PLACEHOLDER = BACKGROUND_IMAGE;
+const GOOGLE_MAPS_EMBED_API_KEY = 'AIzaSyBPmpd0G30y2ioIRHQXWXT-ud29y_ID7zU';
 
 // --- In-memory state for the current session ---
 let currentUser = null;
@@ -25,6 +26,14 @@ function calculateAverage(reviews = []) {
   if (!reviews.length) return 0;
   const sum = reviews.reduce((acc, r) => acc + Number(r.rating), 0);
   return Math.round((sum / reviews.length) * 10) / 10;
+}
+
+function getBusinessMapEmbedUrl(address = '') {
+  // Build a Google Maps embed URL for a business address.
+  const trimmedAddress = address.trim();
+  if (!GOOGLE_MAPS_EMBED_API_KEY || !trimmedAddress) return '';
+  const query = encodeURIComponent(`${trimmedAddress}, Venice, FL`);
+  return `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_EMBED_API_KEY}&q=${query}`;
 }
 
 function mapBusinessFromDb(row) {
@@ -97,11 +106,13 @@ function setBusinessLoadError(message = '') {
 
 async function restGet(path) {
   // Use plain fetch to Supabase REST to avoid client fetch differences across builds.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token || SUPABASE_ANON_KEY;
   const url = `${SUPABASE_URL}/rest/v1${path}`;
   const res = await window.fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json'
     }
   });
@@ -178,6 +189,7 @@ async function syncBusinessesAndFavorites() {
     favorites[currentUser.id] = favs;
   }
   renderBusinesses();
+  renderDealsView();
   renderFavoritesView();
   if (currentUser?.role === 'owner') renderOwnerDashboard();
 }
@@ -293,9 +305,29 @@ function updateRoleVisibility() {
 
 function renderProfile() {
   // Populate profile drawer and topbar avatar with current user info.
-  document.getElementById('profile-name').textContent = currentUser?.name || 'Guest';
-  document.getElementById('profile-email').textContent = currentUser?.email || 'Not signed in';
-  document.getElementById('profile-role').textContent = currentUser?.role || 'Guest';
+  const isGuest = !currentUser || currentUser.role === 'guest';
+  const profileNameRow = document.getElementById('profile-name-row');
+  const profileEmailRow = document.getElementById('profile-email-row');
+  const profileRoleRow = document.getElementById('profile-role-row');
+  const profileGuestNote = document.getElementById('profile-guest-note');
+  const profilePhotoForm = document.getElementById('profile-photo-form');
+  const profileError = document.getElementById('profile-avatar-error');
+  const profileSuccess = document.getElementById('profile-avatar-success');
+
+  document.getElementById('profile-name').textContent = currentUser?.name || '';
+  document.getElementById('profile-email').textContent = currentUser?.email || '';
+  document.getElementById('profile-role').textContent = currentUser?.role || '';
+
+  if (profileNameRow) profileNameRow.classList.toggle('hidden', isGuest);
+  if (profileEmailRow) profileEmailRow.classList.toggle('hidden', isGuest);
+  if (profileRoleRow) profileRoleRow.classList.toggle('hidden', isGuest);
+  if (profilePhotoForm) profilePhotoForm.classList.toggle('hidden', isGuest);
+  if (profileGuestNote) profileGuestNote.classList.toggle('hidden', !isGuest);
+  if (isGuest) {
+    if (profileError) profileError.textContent = '';
+    if (profileSuccess) profileSuccess.textContent = '';
+  }
+
   const avatarEl = document.getElementById('profile-avatar');
   if (avatarEl) {
     const fallback = buildAvatarPlaceholder(currentUser?.name || 'Guest');
@@ -412,6 +444,65 @@ function renderBusinesses() {
   });
 
   if (currentUser?.role === 'owner') renderOwnerDashboard();
+}
+
+function renderDealsView() {
+  // Populate a dedicated list for businesses with active deals.
+  const dealsListEl = document.getElementById('deals-list');
+  if (!dealsListEl) return;
+  dealsListEl.innerHTML = '';
+
+  const searchInput = document.getElementById('deals-search-input');
+  const categoryFilter = document.getElementById('deals-category-filter');
+  const sortSelect = document.getElementById('deals-sort-select');
+  const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+  const category = categoryFilter ? categoryFilter.value : 'all';
+  const sortBy = sortSelect ? sortSelect.value : 'rating';
+
+  let dealBusinesses = businesses.filter((biz) => {
+    const hasDeal = biz.specialDeals && biz.specialDeals.trim();
+    const matchesSearch = biz.name.toLowerCase().includes(searchTerm) || biz.shortDescription.toLowerCase().includes(searchTerm);
+    const matchesCategory = category === 'all' || biz.category === category;
+    return hasDeal && matchesSearch && matchesCategory;
+  });
+
+  if (sortBy === 'rating') {
+    dealBusinesses.sort((a, b) => b.averageRating - a.averageRating);
+  } else if (sortBy === 'reviews') {
+    dealBusinesses.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
+  } else if (sortBy === 'alpha') {
+    dealBusinesses.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const emptyDealsEl = document.getElementById('empty-deals');
+  if (emptyDealsEl) emptyDealsEl.classList.toggle('hidden', dealBusinesses.length > 0);
+
+  dealBusinesses.forEach((biz) => {
+    const card = document.createElement('div');
+    card.className = 'card business-card';
+    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    card.innerHTML = `
+      <div class="business-photo">
+        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+      </div>
+      <div class="card-header">
+        <div>
+          <h3>${biz.name}</h3>
+          <p class="muted">${biz.category} • ${biz.address}</p>
+        </div>
+        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+      </div>
+      <p class="description">${biz.shortDescription}</p>
+      <div class="card-footer">
+        <span class="deal-pill">Deals available</span>
+        <div>
+          ${renderFavoriteButton(biz.id)}
+          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
+        </div>
+      </div>
+    `;
+    dealsListEl.appendChild(card);
+  });
 }
 
 function renderFavoriteButton(businessId) {
@@ -640,6 +731,7 @@ function openDetail(businessId) {
   const modal = document.getElementById('detail-modal');
   const body = document.getElementById('detail-body');
   const bizPhoto = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+  const mapEmbedUrl = getBusinessMapEmbedUrl(biz.address || '');
   const reviewsHTML = biz.reviews && biz.reviews.length
     ? biz.reviews.map(r => {
         const avatar = r.avatar || DEFAULT_AVATAR || buildAvatarPlaceholder(r.userName || 'User');
@@ -673,6 +765,18 @@ function openDetail(businessId) {
     </div>
     <div class="detail-photo">
       <img src="${bizPhoto}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+    </div>
+    <div class="detail-map">
+      <h3>Location</h3>
+      ${mapEmbedUrl
+        ? `<iframe
+            class="map-frame"
+            src="${mapEmbedUrl}"
+            title="Map of ${biz.name}"
+            loading="lazy"
+            allowfullscreen
+            referrerpolicy="no-referrer-when-downgrade"></iframe>`
+        : '<p class="muted">Map unavailable for this address.</p>'}
     </div>
     <div class="deal-banner">Special deals: ${biz.specialDeals || 'No deals posted yet.'}</div>
     <div class="detail-actions">
@@ -801,10 +905,17 @@ async function toggleFavorite(businessId) {
   const detailOpen = detailModal && !detailModal.classList.contains('hidden');
   try {
     if (index >= 0) {
-      await supabase.from('favorites').delete().match({ user_id: currentUser.id, business_id: businessId });
+      const { error: removeError } = await supabase
+        .from('favorites')
+        .delete()
+        .match({ user_id: currentUser.id, business_id: businessId });
+      if (removeError) throw removeError;
       list.splice(index, 1);
     } else {
-      await supabase.from('favorites').upsert({ user_id: currentUser.id, business_id: businessId });
+      const { error: saveError } = await supabase
+        .from('favorites')
+        .upsert({ user_id: currentUser.id, business_id: businessId }, { onConflict: 'user_id,business_id' });
+      if (saveError) throw saveError;
       list.push(businessId);
     }
     await syncBusinessesAndFavorites();
@@ -960,6 +1071,7 @@ function bindEvents() {
       btn.addEventListener('click', () => {
         setView(target);
         if (target === 'favorites') renderFavoritesView();
+        if (target === 'deals') renderDealsView();
       });
     }
   });
@@ -974,6 +1086,9 @@ function bindEvents() {
   document.getElementById('search-input').addEventListener('input', renderBusinesses);
   document.getElementById('category-filter').addEventListener('change', renderBusinesses);
   document.getElementById('sort-select').addEventListener('change', renderBusinesses);
+  document.getElementById('deals-search-input').addEventListener('input', renderDealsView);
+  document.getElementById('deals-category-filter').addEventListener('change', renderDealsView);
+  document.getElementById('deals-sort-select').addEventListener('change', renderDealsView);
   const hasDeals = document.getElementById('has-deals');
   const dealsField = document.getElementById('business-deals');
   hasDeals.addEventListener('change', () => {
@@ -981,19 +1096,24 @@ function bindEvents() {
     if (!hasDeals.checked) dealsField.value = '';
   });
 
-  document.getElementById('business-list').addEventListener('click', (e) => {
-    if (e.target.dataset.detail) {
-      openDetail(e.target.dataset.detail);
+  const handleBusinessListClick = (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const detailBtn = target.closest('[data-detail]');
+    if (detailBtn?.dataset.detail) {
+      openDetail(detailBtn.dataset.detail);
+      return;
     }
-    if (e.target.dataset.fav) {
-      toggleFavorite(e.target.dataset.fav);
+    const favBtn = target.closest('[data-fav]');
+    if (favBtn?.dataset.fav) {
+      toggleFavorite(favBtn.dataset.fav);
     }
-  });
+  };
 
-  document.getElementById('favorites-list').addEventListener('click', (e) => {
-    if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
-    if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
-  });
+  document.getElementById('business-list').addEventListener('click', handleBusinessListClick);
+  document.getElementById('favorites-list').addEventListener('click', handleBusinessListClick);
+  const dealsList = document.getElementById('deals-list');
+  if (dealsList) dealsList.addEventListener('click', handleBusinessListClick);
 
   const ownerList = document.getElementById('owner-business-list');
   if (ownerList) {
@@ -1032,13 +1152,15 @@ async function initSession() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session;
   if (session?.user) {
-    const profile = await fetchProfile(session.user.id);
+    const { data: userData } = await supabase.auth.getUser();
+    const authedUser = userData?.user || session.user;
+    const profile = await fetchProfile(authedUser.id);
     currentUser = {
-      id: session.user.id,
-      name: profile?.name || session.user.user_metadata?.name || session.user.email,
-      email: session.user.email,
-      role: profile?.role || session.user.user_metadata?.role || 'patron',
-      avatar: profile?.avatar || session.user.user_metadata?.avatar || DEFAULT_AVATAR
+      id: authedUser.id,
+      name: profile?.name || authedUser.user_metadata?.name || authedUser.email,
+      email: authedUser.email,
+      role: profile?.role || authedUser.user_metadata?.role || 'patron',
+      avatar: profile?.avatar || authedUser.user_metadata?.avatar || DEFAULT_AVATAR
     };
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
