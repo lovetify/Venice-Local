@@ -159,27 +159,14 @@
         <p id="empty-list" class="empty-text hidden">No businesses found. Be the first to add one!</p>
       </section>
 
-      <!-- Saved favorites -->
-      <section id="favorites-section" class="view-section hidden">
-        <!-- Filled only after a user saves businesses -->
-        <div class="section-header">
-          <h2>My Favorites</h2>
-          <p class="muted">Saved local spots you love.</p>
-        </div>
-        <div id="favorites-list" class="card-grid"></div>
-        <p id="empty-favorites" class="empty-text hidden">You haven’t saved any local businesses yet.</p>
-      </section>
-
+      <!-- Local deals -->
       <section id="deals-section" class="view-section hidden">
         <div class="section-header">
           <h2>Local Deals</h2>
-          <p class="muted">Businesses currently offering local specials.</p>
+          <p class="muted">Businesses currently offering specials.</p>
         </div>
         <div class="filters card">
           <div class="filter-group">
-            <label>Search
-              <input type="text" id="deals-search-input" placeholder="Search by name or keyword">
-            </label>
             <label>Category
               <select id="deals-category-filter">
                 <option value="all">All</option>
@@ -200,7 +187,18 @@
           </div>
         </div>
         <div id="deals-list" class="card-grid"></div>
-        <p id="empty-deals" class="empty-text hidden">No active deals right now. Check back soon.</p>
+        <p id="empty-deals" class="empty-text hidden">No deals are live right now.</p>
+      </section>
+
+      <!-- Saved favorites -->
+      <section id="favorites-section" class="view-section hidden">
+        <!-- Filled only after a user saves businesses -->
+        <div class="section-header">
+          <h2>My Favorites</h2>
+          <p class="muted">Saved local spots you love.</p>
+        </div>
+        <div id="favorites-list" class="card-grid"></div>
+        <p id="empty-favorites" class="empty-text hidden">You haven’t saved any local businesses yet.</p>
       </section>
 
       <!-- Owner add/edit form -->
@@ -227,9 +225,9 @@
             </label>
             <label>Special Deals / Coupons<textarea id="business-deals" rows="2" placeholder="10% off for locals" disabled></textarea></label>
             <div class="photo-inputs">
-              <label>Business Photo (URL)<input type="url" id="business-photo-url" placeholder="https://example.com/storefront.jpg"></label>
-              <label>Business Photo (Upload)<input type="file" id="business-photo-file" accept="image/*"></label>
-              <p class="muted small">Add one clear storefront photo. URL or upload; upload is recommended.</p>
+              <label>Business Photos (URLs, comma or new line separated)<textarea id="business-photo-url" rows="2" placeholder="https://example.com/storefront.jpg"></textarea></label>
+              <label>Business Photos (Upload multiple)<input type="file" id="business-photo-file" accept="image/*" multiple></label>
+              <p class="muted small">Add up to 5 photos. First photo shows on cards; others appear in the gallery.</p>
             </div>
             <button type="submit" class="primary-btn">Save Business</button>
             <p class="error" id="add-error"></p>
@@ -288,10 +286,9 @@
               <h2>Account Settings</h2>
             </div>
           </div>
-          <p id="profile-name-row"><strong>Display Name:</strong> <span id="profile-name"></span></p>
-          <p id="profile-email-row"><strong>Email:</strong> <span id="profile-email"></span></p>
-          <p id="profile-role-row"><strong>Role:</strong> <span id="profile-role"></span></p>
-          <p id="profile-guest-note" class="muted hidden">Sign in or create an account to view profile details, update your photo, save favorites, and leave reviews.</p>
+          <p><strong>Display Name:</strong> <span id="profile-name"></span></p>
+          <p><strong>Email:</strong> <span id="profile-email"></span></p>
+          <p><strong>Role:</strong> <span id="profile-role"></span></p>
           <form id="profile-photo-form" class="profile-photo-form">
             <label>Profile Picture (URL)<input type="url" id="profile-avatar-url" placeholder="https://example.com/photo.jpg"></label>
             <label>Profile Picture (Upload)<input type="file" id="profile-avatar-file" accept="image/*"></label>
@@ -299,6 +296,7 @@
             <p class="error" id="profile-avatar-error"></p>
             <p class="success" id="profile-avatar-success"></p>
           </form>
+          <p id="profile-guest-note" class="muted">Sign in or create an account to leave reviews or add businesses.</p>
         </div>
       </section>
     </main>
@@ -309,6 +307,18 @@
     <div class="modal-content">
       <button class="close-btn" id="close-detail">×</button>
       <div id="detail-body"></div> <!-- Populated dynamically from renderer.js -->
+    </div>
+  </div>
+
+  <!-- Photo lightbox -->
+  <div id="photo-lightbox" class="modal hidden lightbox">
+    <div class="lightbox-content">
+      <button class="close-btn" id="close-lightbox">×</button>
+      <img id="lightbox-image" alt="Full-size">
+      <div class="lightbox-controls">
+        <button id="lightbox-prev" class="ghost-btn">‹ Prev</button>
+        <button id="lightbox-next" class="ghost-btn">Next ›</button>
+      </div>
     </div>
   </div>
 

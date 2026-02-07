@@ -10,7 +10,8 @@ const DEFAULT_AVATAR = assetUrl('Default_pfp.svg.png');
 const BACKGROUND_IMAGE = assetUrl('downtown-venice.webp');
 const STORAGE_BUCKET = 'business-media';
 const BUSINESS_PHOTO_PLACEHOLDER = BACKGROUND_IMAGE;
-const GOOGLE_MAPS_EMBED_API_KEY = 'AIzaSyBPmpd0G30y2ioIRHQXWXT-ud29y_ID7zU';
+const MAPS_API_KEY = 'AIzaSyCTbisKlbC0BhS0AQsuGW3YvsPSaxf3pGo';
+const MAX_GALLERY_PHOTOS = 5;
 
 // --- In-memory state for the current session ---
 let currentUser = null;
@@ -28,12 +29,14 @@ function calculateAverage(reviews = []) {
   return Math.round((sum / reviews.length) * 10) / 10;
 }
 
-function getBusinessMapEmbedUrl(address = '') {
-  // Build a Google Maps embed URL for a business address.
-  const trimmedAddress = address.trim();
-  if (!GOOGLE_MAPS_EMBED_API_KEY || !trimmedAddress) return '';
-  const query = encodeURIComponent(`${trimmedAddress}, Venice, FL`);
-  return `https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_EMBED_API_KEY}&q=${query}`;
+function buildMapUrls(biz) {
+  // Prepare embed and link URLs for Google Maps.
+  const query = encodeURIComponent(`${biz.name} ${biz.address}`);
+  const embed = MAPS_API_KEY
+    ? `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${query}`
+    : `https://www.google.com/maps?q=${query}&output=embed`;
+  const link = `https://www.google.com/maps/search/?api=1&query=${query}`;
+  return { embed, link };
 }
 
 function mapBusinessFromDb(row) {
@@ -50,6 +53,7 @@ function mapBusinessFromDb(row) {
     ownerUserId: row.owner_id,
     reviews: row.reviews || [],
     averageRating: row.average_rating || 0,
+    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : (row.photo_url ? [row.photo_url] : []),
     photoUrl: row.photo_url || ''
   };
 }
@@ -66,7 +70,8 @@ function mapBusinessToDb(biz) {
     special_deals: biz.specialDeals,
     owner_id: biz.ownerUserId,
     reviews: biz.reviews || [],
-    average_rating: biz.averageRating || 0
+    average_rating: biz.averageRating || 0,
+    photo_urls: biz.photoUrls || []
   };
   if (businessPhotoSupported && biz.photoUrl) {
     payload.photo_url = biz.photoUrl;
@@ -106,13 +111,11 @@ function setBusinessLoadError(message = '') {
 
 async function restGet(path) {
   // Use plain fetch to Supabase REST to avoid client fetch differences across builds.
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData?.session?.access_token || SUPABASE_ANON_KEY;
   const url = `${SUPABASE_URL}/rest/v1${path}`;
   const res = await window.fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       Accept: 'application/json'
     }
   });
@@ -189,8 +192,8 @@ async function syncBusinessesAndFavorites() {
     favorites[currentUser.id] = favs;
   }
   renderBusinesses();
-  renderDealsView();
   renderFavoritesView();
+  renderDealsView();
   if (currentUser?.role === 'owner') renderOwnerDashboard();
 }
 
@@ -205,7 +208,7 @@ async function checkBusinessPhotoSupport() {
   // Detect if the photo_url column exists before allowing uploads.
   if (businessPhotoSupported) return true;
   try {
-    await restGet('/businesses?select=photo_url&limit=1');
+    await restGet('/businesses?select=photo_url,photo_urls&limit=1');
     businessPhotoSupported = true;
   } catch (error) {
     businessPhotoSupported = false;
@@ -222,6 +225,17 @@ function readFileAsDataURL(file) {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+async function readFilesAsDataURLs(files = []) {
+  const urls = [];
+  for (const file of files) {
+    // eslint-disable-next-line no-await-in-loop
+    const data = await readFileAsDataURL(file);
+    urls.push(data);
+    if (urls.length >= MAX_GALLERY_PHOTOS) break;
+  }
+  return urls;
 }
 
 function applyStaticAssets() {
@@ -251,6 +265,20 @@ window.onTurnstileSigninExpired = () => {
   if (input) input.value = '';
 };
 
+function getTurnstileToken(formId) {
+  // Grab the Cloudflare Turnstile token from the widget-generated hidden input,
+  // with a fallback to our manual hidden field. Some browsers/ports render the
+  // widget fine (green check) but never fire the callback that fills our field,
+  // which led to the "Please complete the bot check" blocker.
+  const form = document.getElementById(formId);
+  const widgetField = form?.querySelector('input[name="cf-turnstile-response"]');
+  if (widgetField?.value) return widgetField.value;
+
+  const manualId = formId === 'signin-form' ? 'signin-turnstile-token' : 'turnstile-token';
+  const manualField = document.getElementById(manualId);
+  return manualField?.value || '';
+}
+
 function setView(target) {
   // Toggle between main app sections and optionally refresh owner data.
   const sections = document.querySelectorAll('.view-section');
@@ -264,6 +292,8 @@ function setView(target) {
     selected.classList.add('animate-in');
     setTimeout(() => selected.classList.remove('animate-in'), 350);
     if (target === 'owner') renderOwnerDashboard();
+    if (target === 'favorites') renderFavoritesView();
+    if (target === 'deals') renderDealsView();
   }
 }
 
@@ -290,44 +320,32 @@ function updateRoleVisibility() {
   });
   const roleNote = document.getElementById('role-note');
   const authBtn = document.getElementById('logout-btn');
+  const profileForm = document.getElementById('profile-photo-form');
+  const guestNote = document.getElementById('profile-guest-note');
 
   if (!currentUser || currentUser.role === 'guest') {
     roleNote.textContent = 'Guests can browse but must sign in to review, save favorites, or add businesses.';
     if (authBtn) authBtn.textContent = 'Sign In / Create Account';
+    if (profileForm) profileForm.classList.add('hidden');
+    if (guestNote) guestNote.classList.remove('hidden');
   } else if (currentUser.role === 'owner') {
     roleNote.textContent = 'Business Owners can add/edit their businesses and leave reviews.';
     if (authBtn) authBtn.textContent = 'Logout';
+    if (profileForm) profileForm.classList.remove('hidden');
+    if (guestNote) guestNote.classList.add('hidden');
   } else {
     roleNote.textContent = 'Local Customers can leave reviews and save favorites.';
     if (authBtn) authBtn.textContent = 'Logout';
+    if (profileForm) profileForm.classList.remove('hidden');
+    if (guestNote) guestNote.classList.add('hidden');
   }
 }
 
 function renderProfile() {
   // Populate profile drawer and topbar avatar with current user info.
-  const isGuest = !currentUser || currentUser.role === 'guest';
-  const profileNameRow = document.getElementById('profile-name-row');
-  const profileEmailRow = document.getElementById('profile-email-row');
-  const profileRoleRow = document.getElementById('profile-role-row');
-  const profileGuestNote = document.getElementById('profile-guest-note');
-  const profilePhotoForm = document.getElementById('profile-photo-form');
-  const profileError = document.getElementById('profile-avatar-error');
-  const profileSuccess = document.getElementById('profile-avatar-success');
-
-  document.getElementById('profile-name').textContent = currentUser?.name || '';
-  document.getElementById('profile-email').textContent = currentUser?.email || '';
-  document.getElementById('profile-role').textContent = currentUser?.role || '';
-
-  if (profileNameRow) profileNameRow.classList.toggle('hidden', isGuest);
-  if (profileEmailRow) profileEmailRow.classList.toggle('hidden', isGuest);
-  if (profileRoleRow) profileRoleRow.classList.toggle('hidden', isGuest);
-  if (profilePhotoForm) profilePhotoForm.classList.toggle('hidden', isGuest);
-  if (profileGuestNote) profileGuestNote.classList.toggle('hidden', !isGuest);
-  if (isGuest) {
-    if (profileError) profileError.textContent = '';
-    if (profileSuccess) profileSuccess.textContent = '';
-  }
-
+  document.getElementById('profile-name').textContent = currentUser?.name || 'Guest';
+  document.getElementById('profile-email').textContent = currentUser?.email || 'Not signed in';
+  document.getElementById('profile-role').textContent = currentUser?.role || 'Guest';
   const avatarEl = document.getElementById('profile-avatar');
   if (avatarEl) {
     const fallback = buildAvatarPlaceholder(currentUser?.name || 'Guest');
@@ -446,65 +464,6 @@ function renderBusinesses() {
   if (currentUser?.role === 'owner') renderOwnerDashboard();
 }
 
-function renderDealsView() {
-  // Populate a dedicated list for businesses with active deals.
-  const dealsListEl = document.getElementById('deals-list');
-  if (!dealsListEl) return;
-  dealsListEl.innerHTML = '';
-
-  const searchInput = document.getElementById('deals-search-input');
-  const categoryFilter = document.getElementById('deals-category-filter');
-  const sortSelect = document.getElementById('deals-sort-select');
-  const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-  const category = categoryFilter ? categoryFilter.value : 'all';
-  const sortBy = sortSelect ? sortSelect.value : 'rating';
-
-  let dealBusinesses = businesses.filter((biz) => {
-    const hasDeal = biz.specialDeals && biz.specialDeals.trim();
-    const matchesSearch = biz.name.toLowerCase().includes(searchTerm) || biz.shortDescription.toLowerCase().includes(searchTerm);
-    const matchesCategory = category === 'all' || biz.category === category;
-    return hasDeal && matchesSearch && matchesCategory;
-  });
-
-  if (sortBy === 'rating') {
-    dealBusinesses.sort((a, b) => b.averageRating - a.averageRating);
-  } else if (sortBy === 'reviews') {
-    dealBusinesses.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
-  } else if (sortBy === 'alpha') {
-    dealBusinesses.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  const emptyDealsEl = document.getElementById('empty-deals');
-  if (emptyDealsEl) emptyDealsEl.classList.toggle('hidden', dealBusinesses.length > 0);
-
-  dealBusinesses.forEach((biz) => {
-    const card = document.createElement('div');
-    card.className = 'card business-card';
-    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
-    card.innerHTML = `
-      <div class="business-photo">
-        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
-      </div>
-      <div class="card-header">
-        <div>
-          <h3>${biz.name}</h3>
-          <p class="muted">${biz.category} • ${biz.address}</p>
-        </div>
-        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
-      </div>
-      <p class="description">${biz.shortDescription}</p>
-      <div class="card-footer">
-        <span class="deal-pill">Deals available</span>
-        <div>
-          ${renderFavoriteButton(biz.id)}
-          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
-        </div>
-      </div>
-    `;
-    dealsListEl.appendChild(card);
-  });
-}
-
 function renderFavoriteButton(businessId) {
   // Build a save/unsave button for the given business.
   if (!currentUser || currentUser.role === 'guest') return '';
@@ -548,6 +507,56 @@ function renderFavoritesView() {
       </div>
     `;
     favSection.appendChild(card);
+  });
+}
+
+function renderDealsView() {
+  // Show only businesses with an active specialDeals value.
+  const dealsSection = document.getElementById('deals-list');
+  if (!dealsSection) return;
+  dealsSection.innerHTML = '';
+  const category = document.getElementById('deals-category-filter')?.value || 'all';
+  const sortBy = document.getElementById('deals-sort-select')?.value || 'rating';
+
+  let deals = businesses.filter(b => b.specialDeals && b.specialDeals.trim());
+  if (category !== 'all') {
+    deals = deals.filter(b => b.category === category);
+  }
+  if (sortBy === 'rating') {
+    deals.sort((a, b) => b.averageRating - a.averageRating);
+  } else if (sortBy === 'reviews') {
+    deals.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
+  } else if (sortBy === 'alpha') {
+    deals.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  document.getElementById('empty-deals')?.classList.toggle('hidden', deals.length > 0);
+
+  deals.forEach(biz => {
+    const card = document.createElement('div');
+    card.className = 'card business-card';
+    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    card.innerHTML = `
+      <div class="business-photo">
+        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+      </div>
+      <div class="card-header">
+        <div>
+          <h3>${biz.name}</h3>
+          <p class="muted">${biz.category} • ${biz.address}</p>
+        </div>
+        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+      </div>
+      <p class="description">${biz.shortDescription}</p>
+      <div class="deal-pill">Deals available</div>
+      <div class="card-footer">
+        <div>
+          ${renderFavoriteButton(biz.id)}
+          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
+        </div>
+      </div>
+    `;
+    dealsSection.appendChild(card);
   });
 }
 
@@ -618,7 +627,7 @@ async function signUp(event) {
   const avatarUrl = document.getElementById('signup-avatar').value.trim();
   const avatarFile = document.getElementById('signup-avatar-file').files[0];
   const role = document.getElementById('signup-role').value;
-  const turnstileToken = document.getElementById('turnstile-token')?.value || '';
+  const turnstileToken = getTurnstileToken('signup-form');
   const errorEl = document.getElementById('signup-error');
   errorEl.textContent = '';
 
@@ -660,7 +669,7 @@ async function signIn(event) {
   event.preventDefault();
   const email = document.getElementById('signin-email').value.trim().toLowerCase();
   const password = document.getElementById('signin-password').value.trim();
-  const turnstileToken = document.getElementById('signin-turnstile-token')?.value || '';
+  const turnstileToken = getTurnstileToken('signin-form');
   const errorEl = document.getElementById('signin-error');
   errorEl.textContent = '';
 
@@ -730,12 +739,20 @@ function openDetail(businessId) {
   if (!biz) return;
   const modal = document.getElementById('detail-modal');
   const body = document.getElementById('detail-body');
-  const bizPhoto = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
-  const mapEmbedUrl = getBusinessMapEmbedUrl(biz.address || '');
+  const photos = biz.photoUrls?.length ? biz.photoUrls : (biz.photoUrl ? [biz.photoUrl] : []);
+  const primaryPhoto = photos[0] || BUSINESS_PHOTO_PLACEHOLDER;
+  const { embed: mapUrl, link: mapLink } = buildMapUrls(biz);
+  const offline = typeof navigator !== 'undefined' && navigator?.onLine === false;
   const reviewsHTML = biz.reviews && biz.reviews.length
     ? biz.reviews.map(r => {
         const avatar = r.avatar || DEFAULT_AVATAR || buildAvatarPlaceholder(r.userName || 'User');
         const fallback = buildAvatarPlaceholder(r.userName || 'User');
+        const reviewPhotos = r.photos && r.photos.length ? r.photos : (r.photo ? [r.photo] : []);
+        const photosHtml = reviewPhotos.length
+          ? `<div class="review-photos">
+              ${reviewPhotos.map((p, idx) => `<img class="review-photo" data-photos="${reviewPhotos.join('|')}" data-index="${idx}" src="${p}" alt="Review from ${r.userName}" onerror="this.style.display='none'">`).join('')}
+            </div>`
+          : '';
         return `<div class="review">
           <div class="review-header">
             <img class="review-avatar" src="${avatar}" alt="${r.userName || 'Reviewer'} avatar" onerror="this.onerror=null;this.src='${fallback}'">
@@ -745,7 +762,7 @@ function openDetail(businessId) {
             </div>
           </div>
           <p>${r.comment}</p>
-          ${r.photo ? `<img class="review-photo" src="${r.photo}" alt="Review from ${r.userName}" onerror="this.style.display='none'">` : ''}
+          ${photosHtml}
         </div>`;
       }).join('')
     : '<p class="empty-text">Be the first to review this business!</p>';
@@ -764,19 +781,24 @@ function openDetail(businessId) {
       <div class="rating-large"><span>${biz.averageRating.toFixed(1)}</span></div>
     </div>
     <div class="detail-photo">
-      <img src="${bizPhoto}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+      <img src="${primaryPhoto}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
     </div>
-    <div class="detail-map">
-      <h3>Location</h3>
-      ${mapEmbedUrl
-        ? `<iframe
-            class="map-frame"
-            src="${mapEmbedUrl}"
-            title="Map of ${biz.name}"
-            loading="lazy"
-            allowfullscreen
-            referrerpolicy="no-referrer-when-downgrade"></iframe>`
-        : '<p class="muted">Map unavailable for this address.</p>'}
+    ${photos.length > 1 ? `
+    <div class="gallery-strip">
+      ${photos.map((p, idx) => `
+        <button class="gallery-thumb" data-photos="${photos.join('|')}" data-index="${idx}">
+          <img src="${p}" alt="${biz.name} photo ${idx + 1}" onerror="this.parentElement.style.display='none'">
+        </button>
+      `).join('')}
+    </div>
+    ` : ''}
+    <div class="map-shell">
+      ${offline ? '' : `<iframe src="${mapUrl}" loading="lazy" allowfullscreen referrerpolicy="no-referrer-when-downgrade" onerror="this.classList.add('hidden'); const f=this.nextElementSibling; if(f) f.classList.remove('hidden');"></iframe>`}
+      <div class="map-fallback ${offline ? '' : 'hidden'}">
+        <p><strong>Map</strong></p>
+        <p class="muted small">${biz.address}</p>
+        <a class="secondary-btn inline" href="${mapLink}" target="_blank" rel="noopener">Open in Google Maps</a>
+      </div>
     </div>
     <div class="deal-banner">Special deals: ${biz.specialDeals || 'No deals posted yet.'}</div>
     <div class="detail-actions">
@@ -805,8 +827,8 @@ function reviewFormTemplate(id) {
         </div>
       </div>
       <label>Comment<textarea rows="2" required></textarea></label>
-      <label>Photo (URL, optional)<input type="url" class="review-photo-url" placeholder="https://example.com/photo.jpg"></label>
-      <label>Photo (Upload, optional)<input type="file" class="review-photo-file" accept="image/*"></label>
+      <label>Photos (URLs, comma or new line separated, optional)<textarea class="review-photo-url" rows="2" placeholder="https://example.com/photo.jpg"></textarea></label>
+      <label>Photos (Upload multiple, optional)<input type="file" class="review-photo-file" accept="image/*" multiple></label>
       <button type="submit" class="primary-btn">Submit Review</button>
       <p class="error form-error"></p>
     </form>
@@ -831,8 +853,11 @@ async function submitReview(form) {
 
   const rating = ratingInput ? Number(ratingInput.value) : 0;
   const comment = commentInput.value.trim();
-  const photoUrl = photoUrlInput ? photoUrlInput.value.trim() : '';
-  const photoFile = photoFileInput ? photoFileInput.files[0] : null;
+  const photoUrlText = photoUrlInput ? photoUrlInput.value.trim() : '';
+  const photoUrls = photoUrlText
+    ? photoUrlText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).slice(0, MAX_GALLERY_PHOTOS)
+    : [];
+  const photoFiles = photoFileInput ? Array.from(photoFileInput.files).slice(0, MAX_GALLERY_PHOTOS) : [];
 
   if (!rating || rating < 1 || rating > 5) {
     errorEl.textContent = 'Rating must be between 1 and 5.';
@@ -855,13 +880,17 @@ async function submitReview(form) {
     date: new Date().toISOString()
   };
   try {
-    if (photoFile || photoUrl) {
-      try {
-        newReview.photo = await resolvePhoto({ file: photoFile, url: photoUrl, folder: `reviews/${bizId}` });
-      } catch (uploadErr) {
-        errorEl.textContent = 'Could not upload photo. Try a smaller file or use a URL.';
-        return;
-      }
+    // Upload files and combine with URLs
+    const uploaded = [];
+    for (const f of photoFiles) {
+      // eslint-disable-next-line no-await-in-loop
+      const uploadedUrl = await resolvePhoto({ file: f, folder: `reviews/${bizId}` });
+      if (uploadedUrl) uploaded.push(uploadedUrl);
+    }
+    const allPhotos = [...uploaded, ...photoUrls].slice(0, MAX_GALLERY_PHOTOS);
+    if (allPhotos.length) {
+      newReview.photos = allPhotos;
+      newReview.photo = allPhotos[0];
     }
 
     // Primary path: insert into dedicated reviews table (works even if business row RLS blocks patrons).
@@ -873,7 +902,8 @@ async function submitReview(form) {
       comment: newReview.comment,
       date: newReview.date,
       avatar: newReview.avatar,
-      photo: newReview.photo || ''
+      photo: newReview.photo || '',
+      photos: newReview.photos || []
     });
 
     if (reviewInsertError) {
@@ -905,17 +935,10 @@ async function toggleFavorite(businessId) {
   const detailOpen = detailModal && !detailModal.classList.contains('hidden');
   try {
     if (index >= 0) {
-      const { error: removeError } = await supabase
-        .from('favorites')
-        .delete()
-        .match({ user_id: currentUser.id, business_id: businessId });
-      if (removeError) throw removeError;
+      await supabase.from('favorites').delete().match({ user_id: currentUser.id, business_id: businessId });
       list.splice(index, 1);
     } else {
-      const { error: saveError } = await supabase
-        .from('favorites')
-        .upsert({ user_id: currentUser.id, business_id: businessId }, { onConflict: 'user_id,business_id' });
-      if (saveError) throw saveError;
+      await supabase.from('favorites').upsert({ user_id: currentUser.id, business_id: businessId });
       list.push(businessId);
     }
     await syncBusinessesAndFavorites();
@@ -947,8 +970,11 @@ async function submitBusiness(event) {
   const hours = document.getElementById('business-hours').value.trim();
   const hasDeals = document.getElementById('has-deals').checked;
   const deals = hasDeals ? document.getElementById('business-deals').value.trim() : '';
-  const photoUrlInput = document.getElementById('business-photo-url').value.trim();
-  const photoFile = document.getElementById('business-photo-file').files[0];
+  const photoUrlRaw = document.getElementById('business-photo-url').value.trim();
+  const photoUrlsInput = photoUrlRaw
+    ? photoUrlRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+    : [];
+  const photoFiles = Array.from(document.getElementById('business-photo-file').files || []).slice(0, MAX_GALLERY_PHOTOS);
   const errorEl = document.getElementById('add-error');
   const successEl = document.getElementById('add-success');
   errorEl.textContent = '';
@@ -965,20 +991,29 @@ async function submitBusiness(event) {
 
   try {
     await checkBusinessPhotoSupport();
-    if ((photoUrlInput || photoFile) && !businessPhotoSupported) {
+    if ((photoUrlsInput.length || photoFiles.length) && !businessPhotoSupported) {
       errorEl.textContent = 'Business photos need a photo_url column in Supabase. Add it, then try again.';
       return;
     }
 
-    let photoUrl = '';
-    if (businessPhotoSupported && (photoUrlInput || photoFile)) {
+    let gallery = [];
+    if (businessPhotoSupported && (photoUrlsInput.length || photoFiles.length)) {
       try {
-        photoUrl = await resolvePhoto({ file: photoFile, url: photoUrlInput, folder: `businesses/${currentUser?.id || 'guest'}` });
+        // Upload files first, then merge URLs; cap total.
+        for (const f of photoFiles) {
+          // eslint-disable-next-line no-await-in-loop
+          const uploaded = await resolvePhoto({ file: f, folder: `businesses/${currentUser?.id || 'guest'}` });
+          if (uploaded) gallery.push(uploaded);
+          if (gallery.length >= MAX_GALLERY_PHOTOS) break;
+        }
+        gallery = [...gallery, ...photoUrlsInput].slice(0, MAX_GALLERY_PHOTOS);
       } catch (uploadErr) {
         errorEl.textContent = 'Could not upload business photo. Try a smaller file or provide a URL.';
         return;
       }
     }
+
+    const primaryPhoto = gallery[0] || '';
 
     const editingId = event.target.getAttribute('data-editing');
     if (editingId) {
@@ -990,8 +1025,9 @@ async function submitBusiness(event) {
         biz.shortDescription = description;
         biz.hours = hours;
         biz.specialDeals = deals;
-        if (businessPhotoSupported && photoUrl) {
-          biz.photoUrl = photoUrl;
+        if (businessPhotoSupported && gallery.length) {
+          biz.photoUrl = primaryPhoto;
+          biz.photoUrls = gallery;
         }
         const { error: updateError } = await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', editingId);
         if (updateError) throw updateError;
@@ -1010,7 +1046,8 @@ async function submitBusiness(event) {
         ownerUserId: currentUser.id,
         reviews: [],
         averageRating: 0,
-        photoUrl: businessPhotoSupported ? photoUrl : ''
+        photoUrl: businessPhotoSupported ? primaryPhoto : '',
+        photoUrls: businessPhotoSupported ? gallery : []
       };
       const { error: insertError } = await supabase.from('businesses').insert(mapBusinessToDb(newBusiness));
       if (insertError) throw insertError;
@@ -1070,8 +1107,6 @@ function bindEvents() {
     if (target) {
       btn.addEventListener('click', () => {
         setView(target);
-        if (target === 'favorites') renderFavoritesView();
-        if (target === 'deals') renderDealsView();
       });
     }
   });
@@ -1086,9 +1121,6 @@ function bindEvents() {
   document.getElementById('search-input').addEventListener('input', renderBusinesses);
   document.getElementById('category-filter').addEventListener('change', renderBusinesses);
   document.getElementById('sort-select').addEventListener('change', renderBusinesses);
-  document.getElementById('deals-search-input').addEventListener('input', renderDealsView);
-  document.getElementById('deals-category-filter').addEventListener('change', renderDealsView);
-  document.getElementById('deals-sort-select').addEventListener('change', renderDealsView);
   const hasDeals = document.getElementById('has-deals');
   const dealsField = document.getElementById('business-deals');
   hasDeals.addEventListener('change', () => {
@@ -1096,24 +1128,37 @@ function bindEvents() {
     if (!hasDeals.checked) dealsField.value = '';
   });
 
-  const handleBusinessListClick = (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-    const detailBtn = target.closest('[data-detail]');
-    if (detailBtn?.dataset.detail) {
-      openDetail(detailBtn.dataset.detail);
-      return;
+  document.getElementById('business-list').addEventListener('click', (e) => {
+    if (e.target.dataset.detail) {
+      openDetail(e.target.dataset.detail);
     }
-    const favBtn = target.closest('[data-fav]');
-    if (favBtn?.dataset.fav) {
-      toggleFavorite(favBtn.dataset.fav);
+    if (e.target.dataset.fav) {
+      toggleFavorite(e.target.dataset.fav);
     }
-  };
+  });
 
-  document.getElementById('business-list').addEventListener('click', handleBusinessListClick);
-  document.getElementById('favorites-list').addEventListener('click', handleBusinessListClick);
+  document.getElementById('favorites-list').addEventListener('click', (e) => {
+    if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
+    if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
+  });
+
   const dealsList = document.getElementById('deals-list');
-  if (dealsList) dealsList.addEventListener('click', handleBusinessListClick);
+  if (dealsList) {
+    dealsList.addEventListener('click', (e) => {
+      if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
+      if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
+      if (e.target.dataset.photos) {
+        const photos = e.target.dataset.photos.split('|').filter(Boolean);
+        const start = Number(e.target.dataset.index) || 0;
+        openPhotoLightbox(photos, start);
+      }
+    });
+  }
+
+  const dealsCategory = document.getElementById('deals-category-filter');
+  const dealsSort = document.getElementById('deals-sort-select');
+  if (dealsCategory) dealsCategory.addEventListener('change', renderDealsView);
+  if (dealsSort) dealsSort.addEventListener('change', renderDealsView);
 
   const ownerList = document.getElementById('owner-business-list');
   if (ownerList) {
@@ -1138,6 +1183,17 @@ function bindEvents() {
   document.getElementById('detail-body').addEventListener('click', (e) => {
     if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
     if (e.target.dataset.edit) startEditBusiness(e.target.dataset.edit);
+    if (e.target.dataset.photos) {
+      const photos = e.target.dataset.photos.split('|').filter(Boolean);
+      const start = Number(e.target.dataset.index) || 0;
+      openPhotoLightbox(photos, start);
+    }
+    if (e.target.closest('.gallery-thumb') && e.target.closest('.gallery-thumb').dataset.photos) {
+      const thumb = e.target.closest('.gallery-thumb');
+      const photos = thumb.dataset.photos.split('|').filter(Boolean);
+      const start = Number(thumb.dataset.index) || 0;
+      openPhotoLightbox(photos, start);
+    }
   });
 
   document.getElementById('add-business-form').addEventListener('submit', submitBusiness);
@@ -1152,15 +1208,13 @@ async function initSession() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session;
   if (session?.user) {
-    const { data: userData } = await supabase.auth.getUser();
-    const authedUser = userData?.user || session.user;
-    const profile = await fetchProfile(authedUser.id);
+    const profile = await fetchProfile(session.user.id);
     currentUser = {
-      id: authedUser.id,
-      name: profile?.name || authedUser.user_metadata?.name || authedUser.email,
-      email: authedUser.email,
-      role: profile?.role || authedUser.user_metadata?.role || 'patron',
-      avatar: profile?.avatar || authedUser.user_metadata?.avatar || DEFAULT_AVATAR
+      id: session.user.id,
+      name: profile?.name || session.user.user_metadata?.name || session.user.email,
+      email: session.user.email,
+      role: profile?.role || session.user.user_metadata?.role || 'patron',
+      avatar: profile?.avatar || session.user.user_metadata?.avatar || DEFAULT_AVATAR
     };
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
@@ -1180,6 +1234,7 @@ window.addEventListener('DOMContentLoaded', () => {
   showAuthCard('choice');
   applyStaticAssets();
   setupHelpToggle();
+  setupLightbox();
   initSession();
 
   // Disable SW caching; just clean up any old workers/caches so Supabase calls are always live in npm start, dmg, and zip.
@@ -1213,5 +1268,48 @@ function setupHelpToggle() {
   closeBtn.addEventListener('click', close);
   panel.addEventListener('click', (e) => {
     if (e.target === panel) close();
+  });
+}
+
+// Lightbox for fullscreen viewing of gallery photos
+let lightboxPhotos = [];
+let lightboxIndex = 0;
+function setupLightbox() {
+  const lightbox = document.getElementById('photo-lightbox');
+  const img = document.getElementById('lightbox-image');
+  const closeBtn = document.getElementById('close-lightbox');
+  const prevBtn = document.getElementById('lightbox-prev');
+  const nextBtn = document.getElementById('lightbox-next');
+  if (!lightbox || !img || !closeBtn || !prevBtn || !nextBtn) return;
+
+  const render = () => {
+    if (!lightboxPhotos.length) return;
+    lightboxIndex = ((lightboxIndex % lightboxPhotos.length) + lightboxPhotos.length) % lightboxPhotos.length;
+    img.src = lightboxPhotos[lightboxIndex];
+  };
+
+  window.openPhotoLightbox = (photos, start = 0) => {
+    if (!photos || !photos.length) return;
+    lightboxPhotos = photos;
+    lightboxIndex = start;
+    render();
+    lightbox.classList.remove('hidden');
+  };
+
+  const close = () => {
+    lightbox.classList.add('hidden');
+    lightboxPhotos = [];
+    lightboxIndex = 0;
+  };
+
+  closeBtn.addEventListener('click', close);
+  lightbox.addEventListener('click', (e) => { if (e.target.id === 'photo-lightbox') close(); });
+  prevBtn.addEventListener('click', () => { lightboxIndex -= 1; render(); });
+  nextBtn.addEventListener('click', () => { lightboxIndex += 1; render(); });
+  document.addEventListener('keydown', (e) => {
+    if (lightbox.classList.contains('hidden')) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowLeft') { lightboxIndex -= 1; render(); }
+    if (e.key === 'ArrowRight') { lightboxIndex += 1; render(); }
   });
 }
