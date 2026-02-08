@@ -438,6 +438,11 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   font-size: 14px;
   line-height: 1;
 }
+.rating-chip .rating-count {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.9;
+}
 .deal-pill { background: var(--bg-2); padding: 6px 10px; border-radius: 999px; color: var(--accent); font-weight: 700; }
 
 .empty-text { text-align: center; color: var(--accent); padding: 20px 0; }

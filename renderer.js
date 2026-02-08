@@ -30,6 +30,13 @@ function calculateAverage(reviews = []) {
   return Math.round((sum / reviews.length) * 10) / 10;
 }
 
+function renderRatingChip(biz) {
+  // Show rating and, when present, review count in parentheses.
+  const rating = Number(biz?.averageRating || 0).toFixed(1);
+  const reviewCount = biz?.reviews?.length || 0;
+  return `<div class="rating-chip"><span class="star">⭐</span><span>${rating}</span>${reviewCount ? `<span class="rating-count">(${reviewCount})</span>` : ''}</div>`;
+}
+
 function buildMapUrls(biz) {
   // Prepare embed and link URLs for Google Maps.
   const query = encodeURIComponent(`${biz.name} ${biz.address}`);
@@ -631,7 +638,7 @@ function renderBusinesses() {
           <h3>${biz.name}</h3>
           <p class="muted">${biz.category} • ${biz.address}</p>
         </div>
-        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+        ${renderRatingChip(biz)}
       </div>
       <p class="description">${biz.shortDescription}</p>
       <div class="card-footer">
@@ -679,7 +686,7 @@ function renderFavoritesView() {
           <h3>${biz.name}</h3>
           <p class="muted">${biz.category} • ${biz.address}</p>
         </div>
-        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+        ${renderRatingChip(biz)}
       </div>
       <p class="description">${biz.shortDescription}</p>
       <div class="card-footer">
@@ -749,7 +756,7 @@ function renderDealsView() {
           <h3>${biz.name}</h3>
           <p class="muted">${biz.category} • ${biz.address}</p>
         </div>
-        <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
+        ${renderRatingChip(biz)}
       </div>
       <p class="description">${biz.shortDescription}</p>
       <div class="coupon-stack">${coupons}</div>
