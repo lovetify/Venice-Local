@@ -53,14 +53,13 @@ function mapBusinessFromDb(row) {
     ownerUserId: row.owner_id,
     reviews: row.reviews || [],
     averageRating: row.average_rating || 0,
-    photoUrls: Array.isArray(row.photo_urls) ? row.photo_urls : (row.photo_url ? [row.photo_url] : []),
-    photoUrl: row.photo_url || ''
+    photos: []
   };
 }
 
 function mapBusinessToDb(biz) {
   // Convert a UI business object back into a Supabase row.
-  const payload = {
+  return {
     id: biz.id,
     name: biz.name,
     category: biz.category,
@@ -70,20 +69,15 @@ function mapBusinessToDb(biz) {
     special_deals: biz.specialDeals,
     owner_id: biz.ownerUserId,
     reviews: biz.reviews || [],
-    average_rating: biz.averageRating || 0,
-    photo_urls: biz.photoUrls || []
+    average_rating: biz.averageRating || 0
   };
-  if (businessPhotoSupported && biz.photoUrl) {
-    payload.photo_url = biz.photoUrl;
-  }
-  return payload;
 }
 
 async function fetchProfile(userId) {
   // Load a profile row for the signed-in user.
   if (!userId) return null;
   try {
-    const data = await restGet(`/profiles?id=eq.${userId}&limit=1`);
+    const data = await restGet(`/profiles?select=id,name,email,role,avatar&id=eq.${userId}&limit=1`);
     return data?.[0] || null;
   } catch (error) {
     console.warn('Profile fetch failed', error.message);
@@ -110,12 +104,14 @@ function setBusinessLoadError(message = '') {
 }
 
 async function restGet(path) {
-  // Use plain fetch to Supabase REST to avoid client fetch differences across builds.
+  // Use plain fetch to Supabase REST and prefer the signed-in access token for RLS-protected tables.
   const url = `${SUPABASE_URL}/rest/v1${path}`;
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data?.session?.access_token || SUPABASE_ANON_KEY;
   const res = await window.fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json'
     }
   });
@@ -151,16 +147,84 @@ async function fetchReviewsForBusinesses(ids = []) {
   return map;
 }
 
+async function fetchBusinessPhotosForBusinesses(ids = []) {
+  // Fetch business gallery images from the dedicated business_photos table.
+  if (!ids.length) return {};
+  const map = {};
+  try {
+    const { data, error } = await supabase
+      .from('business_photos')
+      .select('business_id,photo_url,sort_order,created_at')
+      .in('business_id', ids)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+
+    const rows = data || [];
+    const pendingSignedEntries = [];
+    const signedPathSet = new Set();
+
+    rows.forEach((row) => {
+      if (!row?.business_id || !row?.photo_url) return;
+      const raw = String(row.photo_url).trim();
+      if (!raw) return;
+      map[row.business_id] = map[row.business_id] || [];
+
+      const storagePath = extractStoragePath(raw);
+      if (!storagePath) {
+        const normalizedUrl = toPublicBusinessPhotoUrl(raw);
+        if (normalizedUrl) map[row.business_id].push(normalizedUrl);
+        return;
+      }
+
+      signedPathSet.add(storagePath);
+      pendingSignedEntries.push({ businessId: row.business_id, raw, storagePath });
+    });
+
+    if (pendingSignedEntries.length) {
+      const signedMap = {};
+      const paths = Array.from(signedPathSet);
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrls(paths, 60 * 60 * 24 * 7);
+      if (!signedError && Array.isArray(signedData)) {
+        signedData.forEach((entry, idx) => {
+          const path = paths[idx];
+          if (!path || entry?.error || !entry?.signedUrl) return;
+          signedMap[path] = entry.signedUrl;
+        });
+      }
+
+      pendingSignedEntries.forEach((entry) => {
+        const resolved = signedMap[entry.storagePath] || toPublicBusinessPhotoUrl(entry.storagePath) || toPublicBusinessPhotoUrl(entry.raw);
+        if (resolved) map[entry.businessId].push(resolved);
+      });
+    }
+
+    Object.keys(map).forEach((businessId) => {
+      map[businessId] = map[businessId].filter(Boolean);
+    });
+  } catch (err) {
+    console.warn('Business photo fetch failed; continuing without galleries.', err.message);
+  }
+  return map;
+}
+
 async function fetchBusinesses() {
   // Retrieve all businesses, attach reviews, and compute ratings.
   try {
     const data = await restGet('/businesses?select=*&order=name.asc');
     const mapped = (data ?? []).map(mapBusinessFromDb).filter(Boolean);
-    const reviewMap = await fetchReviewsForBusinesses(mapped.map((b) => b.id));
+    const ids = mapped.map((b) => b.id);
+    const [reviewMap, photoMap] = await Promise.all([
+      fetchReviewsForBusinesses(ids),
+      fetchBusinessPhotosForBusinesses(ids)
+    ]);
     mapped.forEach((biz) => {
       const reviews = reviewMap[biz.id] || biz.reviews || [];
       biz.reviews = reviews;
       biz.averageRating = calculateAverage(reviews);
+      biz.photos = (photoMap[biz.id] || []).filter(Boolean).slice(0, MAX_GALLERY_PHOTOS);
     });
     setBusinessLoadError(mapped.length ? '' : 'No businesses found in Supabase.');
     return mapped;
@@ -205,16 +269,38 @@ function buildAvatarPlaceholder(name = 'Guest') {
 }
 
 async function checkBusinessPhotoSupport() {
-  // Detect if the photo_url column exists before allowing uploads.
+  // Detect if the business_photos table is available for business gallery uploads.
   if (businessPhotoSupported) return true;
   try {
-    await restGet('/businesses?select=photo_url,photo_urls&limit=1');
+    await restGet('/business_photos?select=business_id,photo_url&limit=1');
     businessPhotoSupported = true;
+    return true;
   } catch (error) {
     businessPhotoSupported = false;
-    console.warn('Business photo column missing. Add photo_url to businesses to enable photos.');
+    console.warn('Business photos are disabled: business_photos table is missing or not readable.');
+    return false;
   }
-  return businessPhotoSupported;
+}
+
+async function replaceBusinessPhotos({ businessId, photos }) {
+  // Replace existing photo rows for a business with the current gallery set.
+  if (!businessPhotoSupported || !businessId) return;
+  const cleanUrls = (photos || []).filter(Boolean).slice(0, MAX_GALLERY_PHOTOS);
+
+  const { error: deleteError } = await supabase
+    .from('business_photos')
+    .delete()
+    .eq('business_id', businessId);
+  if (deleteError) throw deleteError;
+  if (!cleanUrls.length) return;
+
+  const rows = cleanUrls.map((url, index) => ({
+    business_id: businessId,
+    photo_url: url,
+    sort_order: index
+  }));
+  const { error: insertError } = await supabase.from('business_photos').insert(rows);
+  if (insertError) throw insertError;
 }
 
 function readFileAsDataURL(file) {
@@ -306,6 +392,39 @@ async function uploadImage(file, folder) {
   return data?.publicUrl;
 }
 
+function toPublicBusinessPhotoUrl(value) {
+  // Accept full URLs or convert storage object paths into public URLs.
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (/^(https?:)?\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+  const normalizedPath = raw.replace(/^\/+/, '');
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(normalizedPath);
+  return data?.publicUrl || '';
+}
+
+function extractStoragePath(value) {
+  // Derive storage object path from raw path or Supabase storage URL.
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (!/^https?:\/\//i.test(raw)) return raw.replace(/^\/+/, '');
+  try {
+    const url = new URL(raw);
+    const marker = '/storage/v1/object/';
+    const idx = url.pathname.indexOf(marker);
+    if (idx === -1) return '';
+    const suffix = url.pathname.slice(idx + marker.length); // public/<bucket>/<path> or sign/<bucket>/<path>
+    const parts = suffix.split('/').filter(Boolean);
+    if (parts.length < 3) return '';
+    const bucket = parts[1];
+    if (bucket !== STORAGE_BUCKET) return '';
+    return decodeURIComponent(parts.slice(2).join('/'));
+  } catch {
+    return '';
+  }
+}
+
 async function resolvePhoto({ file, url, folder }) {
   // Decide whether to use an uploaded file or a direct URL.
   if (file) return uploadImage(file, folder);
@@ -341,29 +460,28 @@ function updateRoleVisibility() {
   }
 }
 
+function setAvatarImage(imageEl, name, avatar) {
+  // Apply avatar with a generated fallback so broken URLs still render cleanly.
+  if (!imageEl) return;
+  const displayName = name || 'Guest';
+  const fallback = buildAvatarPlaceholder(displayName);
+  const src = avatar || DEFAULT_AVATAR;
+  imageEl.onerror = () => {
+    imageEl.onerror = null;
+    imageEl.src = fallback;
+  };
+  imageEl.src = src;
+  imageEl.alt = `${displayName} avatar`;
+}
+
 function renderProfile() {
   // Populate profile drawer and topbar avatar with current user info.
-  document.getElementById('profile-name').textContent = currentUser?.name || 'Guest';
+  const name = currentUser?.name || 'Guest';
+  document.getElementById('profile-name').textContent = name;
   document.getElementById('profile-email').textContent = currentUser?.email || 'Not signed in';
   document.getElementById('profile-role').textContent = currentUser?.role || 'Guest';
-  const avatarEl = document.getElementById('profile-avatar');
-  if (avatarEl) {
-    const fallback = buildAvatarPlaceholder(currentUser?.name || 'Guest');
-    const placeholder = DEFAULT_AVATAR;
-    const src = currentUser?.avatar || placeholder;
-    avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = fallback; };
-    avatarEl.src = src;
-    avatarEl.alt = `${currentUser?.name || 'Guest'} avatar`;
-  }
-  const topbarAvatar = document.getElementById('topbar-avatar');
-  if (topbarAvatar) {
-    const fallback = buildAvatarPlaceholder(currentUser?.name || 'Guest');
-    const placeholder = DEFAULT_AVATAR;
-    const src = currentUser?.avatar || placeholder;
-    topbarAvatar.onerror = () => { topbarAvatar.onerror = null; topbarAvatar.src = fallback; };
-    topbarAvatar.src = src;
-    topbarAvatar.alt = `${currentUser?.name || 'Guest'} avatar`;
-  }
+  setAvatarImage(document.getElementById('profile-avatar'), name, currentUser?.avatar);
+  setAvatarImage(document.getElementById('topbar-avatar'), name, currentUser?.avatar);
 }
 
 async function updateProfilePhoto(event) {
@@ -436,7 +554,7 @@ function renderBusinesses() {
   filtered.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'card business-card';
-    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
     const hasDeal = !!biz.specialDeals;
     card.innerHTML = `
       <div class="business-photo">
@@ -484,7 +602,7 @@ function renderFavoritesView() {
   savedBusinesses.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'card business-card';
-    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
     const hasDeal = !!biz.specialDeals;
     card.innerHTML = `
       <div class="business-photo">
@@ -515,10 +633,17 @@ function renderDealsView() {
   const dealsSection = document.getElementById('deals-list');
   if (!dealsSection) return;
   dealsSection.innerHTML = '';
+  const searchTerm = document.getElementById('deals-search-input')?.value.trim().toLowerCase() || '';
   const category = document.getElementById('deals-category-filter')?.value || 'all';
   const sortBy = document.getElementById('deals-sort-select')?.value || 'rating';
 
   let deals = businesses.filter(b => b.specialDeals && b.specialDeals.trim());
+  if (searchTerm) {
+    deals = deals.filter((b) => {
+      const searchableText = `${b.name} ${b.shortDescription} ${b.address} ${b.specialDeals}`.toLowerCase();
+      return searchableText.includes(searchTerm);
+    });
+  }
   if (category !== 'all') {
     deals = deals.filter(b => b.category === category);
   }
@@ -535,7 +660,7 @@ function renderDealsView() {
   deals.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'card business-card';
-    const photo = biz.photoUrl || BUSINESS_PHOTO_PLACEHOLDER;
+    const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
     card.innerHTML = `
       <div class="business-photo">
         <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
@@ -739,7 +864,7 @@ function openDetail(businessId) {
   if (!biz) return;
   const modal = document.getElementById('detail-modal');
   const body = document.getElementById('detail-body');
-  const photos = biz.photoUrls?.length ? biz.photoUrls : (biz.photoUrl ? [biz.photoUrl] : []);
+  const photos = biz.photos || [];
   const primaryPhoto = photos[0] || BUSINESS_PHOTO_PLACEHOLDER;
   const { embed: mapUrl, link: mapLink } = buildMapUrls(biz);
   const offline = typeof navigator !== 'undefined' && navigator?.onLine === false;
@@ -827,8 +952,8 @@ function reviewFormTemplate(id) {
         </div>
       </div>
       <label>Comment<textarea rows="2" required></textarea></label>
-      <label>Photos (URLs, comma or new line separated, optional)<textarea class="review-photo-url" rows="2" placeholder="https://example.com/photo.jpg"></textarea></label>
-      <label>Photos (Upload multiple, optional)<input type="file" class="review-photo-file" accept="image/*" multiple></label>
+      <label>Photo URL (optional)<input type="url" class="review-photo-url" placeholder="https://example.com/photo.jpg"></label>
+      <label>Photo Upload (optional, one image)<input type="file" class="review-photo-file" accept="image/*"></label>
       <button type="submit" class="primary-btn">Submit Review</button>
       <p class="error form-error"></p>
     </form>
@@ -843,21 +968,26 @@ function closeDetail() {
 
 async function submitReview(form) {
   // Validate and submit a new review, handling optional photo uploads.
+  if (form.dataset.submitting === 'true') return;
   const bizId = form.getAttribute('data-review');
   const ratingInput = form.querySelector('input[name^="rating-"]:checked');
   const commentInput = form.querySelector('textarea');
   const photoUrlInput = form.querySelector('.review-photo-url');
   const photoFileInput = form.querySelector('.review-photo-file');
   const errorEl = form.querySelector('.form-error');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalSubmitText = submitBtn?.textContent || 'Submit Review';
   errorEl.textContent = '';
+  form.dataset.submitting = 'true';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+  }
 
   const rating = ratingInput ? Number(ratingInput.value) : 0;
   const comment = commentInput.value.trim();
   const photoUrlText = photoUrlInput ? photoUrlInput.value.trim() : '';
-  const photoUrls = photoUrlText
-    ? photoUrlText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).slice(0, MAX_GALLERY_PHOTOS)
-    : [];
-  const photoFiles = photoFileInput ? Array.from(photoFileInput.files).slice(0, MAX_GALLERY_PHOTOS) : [];
+  const photoFiles = photoFileInput ? Array.from(photoFileInput.files || []) : [];
 
   if (!rating || rating < 1 || rating > 5) {
     errorEl.textContent = 'Rating must be between 1 and 5.';
@@ -865,6 +995,18 @@ async function submitReview(form) {
   }
   if (!comment) {
     errorEl.textContent = 'Please add a short comment.';
+    return;
+  }
+  if (photoUrlText && /[\n,]/.test(photoUrlText)) {
+    errorEl.textContent = 'One image per review only.';
+    return;
+  }
+  if (photoFiles.length > 1) {
+    errorEl.textContent = 'One image per review only.';
+    return;
+  }
+  if (photoUrlText && photoFiles.length) {
+    errorEl.textContent = 'Use either one photo URL or one uploaded image.';
     return;
   }
 
@@ -880,21 +1022,19 @@ async function submitReview(form) {
     date: new Date().toISOString()
   };
   try {
-    // Upload files and combine with URLs
-    const uploaded = [];
-    for (const f of photoFiles) {
-      // eslint-disable-next-line no-await-in-loop
-      const uploadedUrl = await resolvePhoto({ file: f, folder: `reviews/${bizId}` });
-      if (uploadedUrl) uploaded.push(uploadedUrl);
+    let reviewPhoto = '';
+    if (photoFiles.length) {
+      reviewPhoto = await resolvePhoto({ file: photoFiles[0], folder: `reviews/${bizId}` });
+    } else if (photoUrlText) {
+      reviewPhoto = photoUrlText;
     }
-    const allPhotos = [...uploaded, ...photoUrls].slice(0, MAX_GALLERY_PHOTOS);
-    if (allPhotos.length) {
-      newReview.photos = allPhotos;
-      newReview.photo = allPhotos[0];
+    if (reviewPhoto) {
+      newReview.photos = [reviewPhoto];
+      newReview.photo = reviewPhoto;
     }
 
-    // Primary path: insert into dedicated reviews table (works even if business row RLS blocks patrons).
-    const { error: reviewInsertError } = await supabase.from('reviews').insert({
+    // Insert into reviews table, with fallback for schemas that don't include the photos array column.
+    const reviewPayload = {
       business_id: bizId,
       user_id: newReview.userId,
       user_name: newReview.userName,
@@ -902,23 +1042,33 @@ async function submitReview(form) {
       comment: newReview.comment,
       date: newReview.date,
       avatar: newReview.avatar,
-      photo: newReview.photo || '',
+      photo: newReview.photo || ''
+    };
+    let { error: reviewInsertError } = await supabase.from('reviews').insert({
+      ...reviewPayload,
       photos: newReview.photos || []
     });
-
-    if (reviewInsertError) {
-      // Fallback to legacy embedded reviews on the business row.
-      console.warn('Dedicated review insert failed, attempting to store on business row', reviewInsertError.message);
-      biz.reviews.push(newReview);
-      biz.averageRating = calculateAverage(biz.reviews);
-      await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', bizId);
+    if (reviewInsertError && /Could not find the 'photos' column/i.test(reviewInsertError.message || '')) {
+      ({ error: reviewInsertError } = await supabase.from('reviews').insert(reviewPayload));
     }
+    if (reviewInsertError) throw reviewInsertError;
 
     await syncBusinessesAndFavorites();
     form.reset();
     openDetail(bizId); // re-render detail with new review
   } catch (err) {
-    errorEl.textContent = 'Could not submit review. Please try again.';
+    const detail = err?.message || '';
+    if (/row-level security|permission|not authorized|denied/i.test(detail)) {
+      errorEl.textContent = 'Review save blocked by Supabase policy. Check reviews INSERT policy for authenticated users.';
+    } else {
+      errorEl.textContent = detail || 'Could not submit review. Please try again.';
+    }
+  } finally {
+    form.dataset.submitting = 'false';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalSubmitText;
+    }
   }
 }
 
@@ -959,6 +1109,9 @@ async function toggleFavorite(businessId) {
 async function submitBusiness(event) {
   // Add a new business or update an existing one owned by the user.
   event.preventDefault();
+  const form = event.target;
+  if (form.dataset.submitting === 'true') return;
+
   if (!currentUser || currentUser.role === 'guest') {
     document.getElementById('add-error').textContent = 'Sign in as a business owner to add businesses.';
     return;
@@ -970,54 +1123,57 @@ async function submitBusiness(event) {
   const hours = document.getElementById('business-hours').value.trim();
   const hasDeals = document.getElementById('has-deals').checked;
   const deals = hasDeals ? document.getElementById('business-deals').value.trim() : '';
-  const photoUrlRaw = document.getElementById('business-photo-url').value.trim();
-  const photoUrlsInput = photoUrlRaw
-    ? photoUrlRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
-    : [];
   const photoFiles = Array.from(document.getElementById('business-photo-file').files || []).slice(0, MAX_GALLERY_PHOTOS);
   const errorEl = document.getElementById('add-error');
   const successEl = document.getElementById('add-success');
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalSubmitText = submitBtn?.textContent || 'Save Business';
   errorEl.textContent = '';
   successEl.textContent = '';
-
-  if (!name || !category || !address || !description || !hours) {
-    errorEl.textContent = 'All fields except deals are required.';
-    return;
-  }
-  if (!address.toLowerCase().includes('venice')) {
-    errorEl.textContent = 'Address must reference Venice, FL (downtown).';
-    return;
+  form.dataset.submitting = 'true';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
   }
 
   try {
-    await checkBusinessPhotoSupport();
-    if ((photoUrlsInput.length || photoFiles.length) && !businessPhotoSupported) {
-      errorEl.textContent = 'Business photos need a photo_url column in Supabase. Add it, then try again.';
+    if (!name || !category || !address || !description || !hours) {
+      errorEl.textContent = 'All fields except deals are required.';
+      return;
+    }
+    if (!address.toLowerCase().includes('venice')) {
+      errorEl.textContent = 'Address must reference Venice, FL (downtown).';
       return;
     }
 
-    let gallery = [];
-    if (businessPhotoSupported && (photoUrlsInput.length || photoFiles.length)) {
+    await checkBusinessPhotoSupport();
+    if (photoFiles.length && !businessPhotoSupported) {
+      errorEl.textContent = 'Business photos need the business_photos table in Supabase. Add it, then try again.';
+      return;
+    }
+
+    const editingId = form.getAttribute('data-editing');
+    const existingBiz = editingId ? businesses.find(b => b.id === editingId) : null;
+    let gallery = existingBiz ? [...(existingBiz.photos || [])] : [];
+    if (businessPhotoSupported && photoFiles.length) {
       try {
-        // Upload files first, then merge URLs; cap total.
+        // Upload files to storage and use only returned public URLs.
+        const uploadedUrls = [];
         for (const f of photoFiles) {
           // eslint-disable-next-line no-await-in-loop
-          const uploaded = await resolvePhoto({ file: f, folder: `businesses/${currentUser?.id || 'guest'}` });
-          if (uploaded) gallery.push(uploaded);
-          if (gallery.length >= MAX_GALLERY_PHOTOS) break;
+          const uploaded = await uploadImage(f, `businesses/${currentUser?.id || 'guest'}`);
+          if (uploaded) uploadedUrls.push(uploaded);
+          if (uploadedUrls.length >= MAX_GALLERY_PHOTOS) break;
         }
-        gallery = [...gallery, ...photoUrlsInput].slice(0, MAX_GALLERY_PHOTOS);
+        gallery = uploadedUrls.slice(0, MAX_GALLERY_PHOTOS);
       } catch (uploadErr) {
-        errorEl.textContent = 'Could not upload business photo. Try a smaller file or provide a URL.';
+        errorEl.textContent = 'Could not upload business photos. Try smaller files and try again.';
         return;
       }
     }
 
-    const primaryPhoto = gallery[0] || '';
-
-    const editingId = event.target.getAttribute('data-editing');
     if (editingId) {
-      const biz = businesses.find(b => b.id === editingId);
+      const biz = existingBiz;
       if (biz && biz.ownerUserId === currentUser.id) {
         biz.name = name;
         biz.category = category;
@@ -1025,12 +1181,12 @@ async function submitBusiness(event) {
         biz.shortDescription = description;
         biz.hours = hours;
         biz.specialDeals = deals;
-        if (businessPhotoSupported && gallery.length) {
-          biz.photoUrl = primaryPhoto;
-          biz.photoUrls = gallery;
-        }
         const { error: updateError } = await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', editingId);
         if (updateError) throw updateError;
+        if (businessPhotoSupported) {
+          await replaceBusinessPhotos({ businessId: editingId, photos: gallery });
+        }
+        biz.photos = gallery;
       }
       event.target.removeAttribute('data-editing');
       successEl.textContent = 'Business updated successfully.';
@@ -1046,21 +1202,29 @@ async function submitBusiness(event) {
         ownerUserId: currentUser.id,
         reviews: [],
         averageRating: 0,
-        photoUrl: businessPhotoSupported ? primaryPhoto : '',
-        photoUrls: businessPhotoSupported ? gallery : []
+        photos: gallery
       };
       const { error: insertError } = await supabase.from('businesses').insert(mapBusinessToDb(newBusiness));
       if (insertError) throw insertError;
+      if (businessPhotoSupported) {
+        await replaceBusinessPhotos({ businessId: newBusiness.id, photos: gallery });
+      }
       businesses.push(newBusiness);
       successEl.textContent = 'Business added successfully.';
     }
 
     await syncBusinessesAndFavorites();
-    event.target.reset();
+    form.reset();
     setView('owner'); // exit add screen after saving
   } catch (err) {
     console.error('Business save failed', err.message || err);
     errorEl.textContent = err?.message || 'Could not save business. Please try again.';
+  } finally {
+    form.dataset.submitting = 'false';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalSubmitText;
+    }
   }
 }
 
@@ -1079,9 +1243,7 @@ function startEditBusiness(bizId) {
   document.getElementById('has-deals').checked = !!biz.specialDeals;
   document.getElementById('business-deals').disabled = !biz.specialDeals;
   document.getElementById('business-deals').value = biz.specialDeals;
-  const photoUrlInput = document.getElementById('business-photo-url');
   const photoFileInput = document.getElementById('business-photo-file');
-  if (photoUrlInput) photoUrlInput.value = biz.photoUrl || '';
   if (photoFileInput) photoFileInput.value = '';
   document.getElementById('add-success').textContent = 'Editing your business. Save changes when ready.';
 }
@@ -1089,8 +1251,8 @@ function startEditBusiness(bizId) {
 // -----------------------------
 // Event bindings
 // -----------------------------
-function bindEvents() {
-  // Connect UI controls to their handlers once the DOM is ready.
+function bindAuthEvents() {
+  // Wire auth form actions and account controls.
   document.getElementById('signup-form').addEventListener('submit', signUp);
   document.getElementById('signin-form').addEventListener('submit', signIn);
   document.getElementById('start-create-btn').addEventListener('click', () => showAuthCard('signup'));
@@ -1101,7 +1263,10 @@ function bindEvents() {
   });
   document.getElementById('logout-btn').addEventListener('click', logout);
   document.getElementById('profile-photo-form').addEventListener('submit', updateProfilePhoto);
+}
 
+function bindNavigationEvents() {
+  // Handle top-level section switches.
   document.querySelectorAll('[data-target]:not(.avatar-chip)').forEach(btn => {
     const target = btn.getAttribute('data-target');
     if (target) {
@@ -1117,7 +1282,10 @@ function bindEvents() {
       chip.addEventListener('click', () => setView(target));
     }
   });
+}
 
+function bindBusinessFilterEvents() {
+  // Keep the main business listing in sync with filter inputs.
   document.getElementById('search-input').addEventListener('input', renderBusinesses);
   document.getElementById('category-filter').addEventListener('change', renderBusinesses);
   document.getElementById('sort-select').addEventListener('change', renderBusinesses);
@@ -1127,7 +1295,10 @@ function bindEvents() {
     dealsField.disabled = !hasDeals.checked;
     if (!hasDeals.checked) dealsField.value = '';
   });
+}
 
+function bindListEvents() {
+  // Wire interactions from rendered list cards.
   document.getElementById('business-list').addEventListener('click', (e) => {
     if (e.target.dataset.detail) {
       openDetail(e.target.dataset.detail);
@@ -1155,11 +1326,6 @@ function bindEvents() {
     });
   }
 
-  const dealsCategory = document.getElementById('deals-category-filter');
-  const dealsSort = document.getElementById('deals-sort-select');
-  if (dealsCategory) dealsCategory.addEventListener('change', renderDealsView);
-  if (dealsSort) dealsSort.addEventListener('change', renderDealsView);
-
   const ownerList = document.getElementById('owner-business-list');
   if (ownerList) {
     ownerList.addEventListener('click', (e) => {
@@ -1167,7 +1333,20 @@ function bindEvents() {
       if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
     });
   }
+}
 
+function bindDealsFilterEvents() {
+  // Keep deals list filtered and sorted.
+  const dealsCategory = document.getElementById('deals-category-filter');
+  const dealsSort = document.getElementById('deals-sort-select');
+  const dealsSearch = document.getElementById('deals-search-input');
+  if (dealsCategory) dealsCategory.addEventListener('change', renderDealsView);
+  if (dealsSort) dealsSort.addEventListener('change', renderDealsView);
+  if (dealsSearch) dealsSearch.addEventListener('input', renderDealsView);
+}
+
+function bindModalEvents() {
+  // Handle detail modal close, reviews, and gallery actions.
   document.getElementById('detail-modal').addEventListener('click', (e) => {
     if (e.target.id === 'detail-modal') closeDetail();
   });
@@ -1195,9 +1374,18 @@ function bindEvents() {
       openPhotoLightbox(photos, start);
     }
   });
+}
+
+function bindEvents() {
+  // Connect UI controls to their handlers once the DOM is ready.
+  bindAuthEvents();
+  bindNavigationEvents();
+  bindBusinessFilterEvents();
+  bindListEvents();
+  bindDealsFilterEvents();
+  bindModalEvents();
 
   document.getElementById('add-business-form').addEventListener('submit', submitBusiness);
-
 }
 
 // -----------------------------
