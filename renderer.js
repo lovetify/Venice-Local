@@ -50,6 +50,7 @@ function mapBusinessFromDb(row) {
     shortDescription: row.short_description,
     hours: row.hours,
     specialDeals: row.special_deals,
+    isActive: row.is_active !== false,
     ownerUserId: row.owner_id,
     reviews: row.reviews || [],
     averageRating: row.average_rating || 0,
@@ -67,6 +68,7 @@ function mapBusinessToDb(biz) {
     short_description: biz.shortDescription,
     hours: biz.hours,
     special_deals: biz.specialDeals,
+    is_active: biz.isActive !== false,
     owner_id: biz.ownerUserId,
     reviews: biz.reviews || [],
     average_rating: biz.averageRating || 0
@@ -536,6 +538,7 @@ function renderBusinesses() {
   const sortBy = document.getElementById('sort-select').value;
 
   let filtered = businesses.filter(biz => {
+    if (biz.isActive === false) return false;
     const matchesSearch = biz.name.toLowerCase().includes(searchTerm) || biz.shortDescription.toLowerCase().includes(searchTerm);
     const matchesCategory = category === 'all' || biz.category === category;
     return matchesSearch && matchesCategory;
@@ -596,7 +599,7 @@ function renderFavoritesView() {
   const favSection = document.getElementById('favorites-list');
   favSection.innerHTML = '';
   const favoriteIds = favorites[currentUser?.id] || [];
-  const savedBusinesses = businesses.filter(b => favoriteIds.includes(b.id));
+  const savedBusinesses = businesses.filter(b => favoriteIds.includes(b.id) && b.isActive !== false);
   document.getElementById('empty-favorites').classList.toggle('hidden', savedBusinesses.length > 0);
 
   savedBusinesses.forEach(biz => {
@@ -637,7 +640,7 @@ function renderDealsView() {
   const category = document.getElementById('deals-category-filter')?.value || 'all';
   const sortBy = document.getElementById('deals-sort-select')?.value || 'rating';
 
-  let deals = businesses.filter(b => b.specialDeals && b.specialDeals.trim());
+  let deals = businesses.filter(b => b.isActive !== false && b.specialDeals && b.specialDeals.trim());
   if (searchTerm) {
     deals = deals.filter((b) => {
       const searchableText = `${b.name} ${b.shortDescription} ${b.address} ${b.specialDeals}`.toLowerCase();
@@ -693,7 +696,7 @@ function renderOwnerDashboard() {
   const avgRating = owned.length
     ? (owned.reduce((acc, biz) => acc + (biz.averageRating || 0), 0) / owned.length).toFixed(1)
     : '0.0';
-  const activeDeals = owned.filter(b => b.specialDeals?.trim()).length;
+  const activeDeals = owned.filter(b => b.isActive !== false && b.specialDeals?.trim()).length;
 
   const bizCountEl = document.getElementById('stat-count-businesses');
   const reviewEl = document.getElementById('stat-count-reviews');
@@ -713,12 +716,16 @@ function renderOwnerDashboard() {
   owned.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'owner-card';
+    const activeLabel = biz.isActive === false ? 'Inactive (hidden from public)' : 'Active (visible to public)';
+    const toggleLabel = biz.isActive === false ? 'Set Active' : 'Set Inactive';
     card.innerHTML = `
       <h4>${biz.name}</h4>
       <p class="meta">${biz.category} • ${biz.address}</p>
+      <p class="meta">Status: ${activeLabel}</p>
       <p class="meta">Rating: ${biz.averageRating.toFixed(1)} • Reviews: ${biz.reviews?.length || 0}</p>
       <p class="deal">${biz.specialDeals ? `Deal: ${biz.specialDeals}` : 'No deal posted yet'}</p>
       <div class="actions">
+        <button class="secondary-btn" data-toggle-active="${biz.id}">${toggleLabel}</button>
         <button class="secondary-btn" data-edit="${biz.id}">Edit</button>
         <button class="ghost-btn" data-detail="${biz.id}">View</button>
       </div>
@@ -862,6 +869,8 @@ function openDetail(businessId) {
   // Populate and show the business detail modal.
   const biz = businesses.find(b => b.id === businessId);
   if (!biz) return;
+  const canManageInactive = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
+  if (biz.isActive === false && !canManageInactive) return;
   const modal = document.getElementById('detail-modal');
   const body = document.getElementById('detail-body');
   const photos = biz.photos || [];
@@ -1078,6 +1087,8 @@ async function submitReview(form) {
 async function toggleFavorite(businessId) {
   // Save or remove a business from the user's favorites in Supabase.
   if (!currentUser || currentUser.role === 'guest') return;
+  const biz = businesses.find((b) => b.id === businessId);
+  if (biz && biz.isActive === false) return;
   favorites[currentUser.id] = favorites[currentUser.id] || [];
   const list = favorites[currentUser.id];
   const index = list.indexOf(businessId);
@@ -1181,6 +1192,7 @@ async function submitBusiness(event) {
         biz.shortDescription = description;
         biz.hours = hours;
         biz.specialDeals = deals;
+        if (typeof biz.isActive !== 'boolean') biz.isActive = true;
         const { error: updateError } = await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', editingId);
         if (updateError) throw updateError;
         if (businessPhotoSupported) {
@@ -1199,6 +1211,7 @@ async function submitBusiness(event) {
         shortDescription: description,
         hours,
         specialDeals: deals,
+        isActive: true,
         ownerUserId: currentUser.id,
         reviews: [],
         averageRating: 0,
@@ -1225,6 +1238,38 @@ async function submitBusiness(event) {
       submitBtn.disabled = false;
       submitBtn.textContent = originalSubmitText;
     }
+  }
+}
+
+async function toggleBusinessActive(bizId) {
+  // Owners can hide/show their business from public-facing views without deleting it.
+  if (!currentUser || currentUser.role !== 'owner') return;
+  const biz = businesses.find((b) => b.id === bizId);
+  if (!biz || biz.ownerUserId !== currentUser.id) return;
+
+  const makingActive = biz.isActive === false;
+  const prompt = makingActive
+    ? `Set "${biz.name}" to Active?\n\nThis business will become visible to the public again.`
+    : `Set "${biz.name}" to Inactive?\n\nThis hides it from public lists, deals, favorites, and details, but does not delete it.`;
+  const confirmed = window.confirm(prompt);
+  if (!confirmed) return;
+
+  const nextActive = makingActive;
+  const previousActive = biz.isActive !== false;
+  biz.isActive = nextActive;
+
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ is_active: nextActive })
+      .eq('id', bizId)
+      .eq('owner_id', currentUser.id);
+    if (error) throw error;
+    await syncBusinessesAndFavorites();
+    renderOwnerDashboard();
+  } catch (err) {
+    biz.isActive = previousActive;
+    alert(err?.message || 'Could not update business visibility.');
   }
 }
 
@@ -1329,6 +1374,7 @@ function bindListEvents() {
   const ownerList = document.getElementById('owner-business-list');
   if (ownerList) {
     ownerList.addEventListener('click', (e) => {
+      if (e.target.dataset.toggleActive) toggleBusinessActive(e.target.dataset.toggleActive);
       if (e.target.dataset.edit) startEditBusiness(e.target.dataset.edit);
       if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
     });
