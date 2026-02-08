@@ -338,10 +338,10 @@
   <!-- Tidio chatbot -->
   <script src="//code.tidio.co/oybeqwv68c0atjmzfnzykv8qlahr9qde.js" async></script>
   <script>
-    // Anchor Tidio in the bottom-right corner (nearly touching edges).
+    // Keep Tidio visible in the bottom-right corner.
     function onTidioChatApiReady() {
-      tidioChatApi.adjustStyles('#tidio { bottom: -100px !important; right: -4px !important; }');
-      tidioChatApi.adjustStyles('@media only screen and (max-width: 980px) { #tidio { bottom: -100px !important; right: -4px !important; } }');
+      tidioChatApi.adjustStyles('#tidio { bottom: 16px !important; right: 12px !important; }');
+      tidioChatApi.adjustStyles('@media only screen and (max-width: 980px) { #tidio { bottom: 16px !important; right: 12px !important; } }');
     }
     if (window.tidioChatApi) {
       window.tidioChatApi.on('ready', onTidioChatApiReady);

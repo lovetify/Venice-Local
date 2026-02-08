@@ -79,23 +79,52 @@ function mapBusinessToDb(biz) {
 // Deal helpers keep compatibility with the old single-string specialDeals field.
 function parseDeals(raw) {
   if (!raw) return [];
-  // Try structured JSON first.
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed
+  const normalizeDeals = (value) => {
+    if (Array.isArray(value)) {
+      return value
         .map((d) => ({
-          id: d.id || crypto.randomUUID(),
-          title: d.title || d.text || '',
-          active: d.active !== false
+          id: d?.id || crypto.randomUUID(),
+          title: d?.title || d?.text || '',
+          active: d?.active !== false
         }))
         .filter((d) => d.title.trim());
     }
-  } catch (e) {
-    // fall back to plain text lines
+    if (value && typeof value === 'object') {
+      const single = {
+        id: value.id || crypto.randomUUID(),
+        title: value.title || value.text || '',
+        active: value.active !== false
+      };
+      return single.title.trim() ? [single] : [];
+    }
+    return null;
+  };
+
+  // Handle JSON, including values that were accidentally stringified twice.
+  if (typeof raw === 'string') {
+    let candidate = raw.trim();
+    for (let i = 0; i < 2; i += 1) {
+      if (!candidate) break;
+      try {
+        const parsed = JSON.parse(candidate);
+        const normalized = normalizeDeals(parsed);
+        if (normalized) return normalized;
+        if (typeof parsed === 'string') {
+          candidate = parsed.trim();
+          continue;
+        }
+        break;
+      } catch (e) {
+        break;
+      }
+    }
+  } else {
+    const normalized = normalizeDeals(raw);
+    if (normalized) return normalized;
   }
+
   // Fallback: treat each non-empty line as an active deal.
-  return raw
+  return String(raw)
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
