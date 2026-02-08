@@ -335,5 +335,19 @@
   <script src="assets/vendor/supabase.js"></script>
   <!-- All interactive behavior is in renderer.js -->
   <script type="module" src="renderer.js"></script>
+  <!-- Tidio chatbot -->
+  <script src="//code.tidio.co/oybeqwv68c0atjmzfnzykv8qlahr9qde.js" async></script>
+  <script>
+    // Anchor Tidio in the bottom-right corner (nearly touching edges).
+    function onTidioChatApiReady() {
+      tidioChatApi.adjustStyles('#tidio { bottom: -100px !important; right: -4px !important; }');
+      tidioChatApi.adjustStyles('@media only screen and (max-width: 980px) { #tidio { bottom: -100px !important; right: -4px !important; } }');
+    }
+    if (window.tidioChatApi) {
+      window.tidioChatApi.on('ready', onTidioChatApiReady);
+    } else {
+      document.addEventListener('tidioChat-ready', onTidioChatApiReady);
+    }
+  </script>
 </body>
 </html>
