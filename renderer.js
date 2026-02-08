@@ -947,6 +947,7 @@ function openDetail(businessId) {
   const primaryPhoto = photos[0] || BUSINESS_PHOTO_PLACEHOLDER;
   const { embed: mapUrl, link: mapLink } = buildMapUrls(biz);
   const offline = typeof navigator !== 'undefined' && navigator?.onLine === false;
+  const reviewCount = biz.reviews?.length || 0;
   const reviewsHTML = biz.reviews && biz.reviews.length
     ? biz.reviews.map(r => {
         const avatar = r.avatar || DEFAULT_AVATAR || buildAvatarPlaceholder(r.userName || 'User');
@@ -1022,7 +1023,7 @@ function openDetail(businessId) {
       ${renderFavoriteButton(biz.id)}
       ${canEdit ? `<button class="secondary-btn" data-edit="${biz.id}">Edit Business</button>` : ''}
     </div>
-    <h3>Reviews</h3>
+    <h3>Reviews (${reviewCount})</h3>
     <div class="reviews">${reviewsHTML}</div>
     ${canReview ? reviewFormTemplate(biz.id) : '<p class="muted">Sign in to leave a review.</p>'}
   `;
