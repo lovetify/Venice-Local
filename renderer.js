@@ -12,6 +12,7 @@ const STORAGE_BUCKET = 'business-media';
 const BUSINESS_PHOTO_PLACEHOLDER = BACKGROUND_IMAGE;
 const MAPS_API_KEY = 'AIzaSyCTbisKlbC0BhS0AQsuGW3YvsPSaxf3pGo';
 const MAX_GALLERY_PHOTOS = 5;
+const MAX_COUPONS = 5;
 
 // --- In-memory state for the current session ---
 let currentUser = null;
@@ -73,6 +74,39 @@ function mapBusinessToDb(biz) {
     reviews: biz.reviews || [],
     average_rating: biz.averageRating || 0
   };
+}
+
+// Deal helpers keep compatibility with the old single-string specialDeals field.
+function parseDeals(raw) {
+  if (!raw) return [];
+  // Try structured JSON first.
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((d) => ({
+          id: d.id || crypto.randomUUID(),
+          title: d.title || d.text || '',
+          active: d.active !== false
+        }))
+        .filter((d) => d.title.trim());
+    }
+  } catch (e) {
+    // fall back to plain text lines
+  }
+  // Fallback: treat each non-empty line as an active deal.
+  return raw
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((title) => ({ id: crypto.randomUUID(), title, active: true }));
+}
+
+function serializeDeals(deals = []) {
+  const cleaned = deals
+    .filter((d) => d.title && d.title.trim())
+    .map((d) => ({ id: d.id || crypto.randomUUID(), title: d.title.trim(), active: d.active !== false }));
+  return cleaned.length ? JSON.stringify(cleaned) : '';
 }
 
 async function fetchProfile(userId) {
@@ -558,7 +592,7 @@ function renderBusinesses() {
     const card = document.createElement('div');
     card.className = 'card business-card';
     const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
-    const hasDeal = !!biz.specialDeals;
+    const hasDeal = parseDeals(biz.specialDeals).some((d) => d.active);
     card.innerHTML = `
       <div class="business-photo">
         <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
@@ -606,7 +640,7 @@ function renderFavoritesView() {
     const card = document.createElement('div');
     card.className = 'card business-card';
     const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
-    const hasDeal = !!biz.specialDeals;
+    const hasDeal = parseDeals(biz.specialDeals).some((d) => d.active);
     card.innerHTML = `
       <div class="business-photo">
         <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
@@ -640,10 +674,14 @@ function renderDealsView() {
   const category = document.getElementById('deals-category-filter')?.value || 'all';
   const sortBy = document.getElementById('deals-sort-select')?.value || 'rating';
 
-  let deals = businesses.filter(b => b.isActive !== false && b.specialDeals && b.specialDeals.trim());
+  let deals = businesses.filter(b => {
+    const activeDeals = parseDeals(b.specialDeals).filter((d) => d.active);
+    return b.isActive !== false && activeDeals.length;
+  });
   if (searchTerm) {
     deals = deals.filter((b) => {
-      const searchableText = `${b.name} ${b.shortDescription} ${b.address} ${b.specialDeals}`.toLowerCase();
+      const dealText = parseDeals(b.specialDeals).map((d) => d.title).join(' ');
+      const searchableText = `${b.name} ${b.shortDescription} ${b.address} ${dealText}`.toLowerCase();
       return searchableText.includes(searchTerm);
     });
   }
@@ -664,6 +702,15 @@ function renderDealsView() {
     const card = document.createElement('div');
     card.className = 'card business-card';
     const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
+    const activeDeals = parseDeals(biz.specialDeals).filter((d) => d.active);
+    const coupons = activeDeals.map((d) => `
+      <div class="coupon">
+        <div class="coupon-body">
+          <span class="coupon-title">${d.title}</span>
+          <span class="coupon-status live">Active</span>
+        </div>
+      </div>
+    `).join('');
     card.innerHTML = `
       <div class="business-photo">
         <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
@@ -676,7 +723,7 @@ function renderDealsView() {
         <div class="rating-chip"><span class="star">⭐</span><span>${biz.averageRating.toFixed(1)}</span></div>
       </div>
       <p class="description">${biz.shortDescription}</p>
-      <div class="deal-pill">Deals available</div>
+      <div class="coupon-stack">${coupons}</div>
       <div class="card-footer">
         <div>
           ${renderFavoriteButton(biz.id)}
@@ -696,7 +743,10 @@ function renderOwnerDashboard() {
   const avgRating = owned.length
     ? (owned.reduce((acc, biz) => acc + (biz.averageRating || 0), 0) / owned.length).toFixed(1)
     : '0.0';
-  const activeDeals = owned.filter(b => b.isActive !== false && b.specialDeals?.trim()).length;
+  const activeDeals = owned.reduce((acc, b) => {
+    const live = parseDeals(b.specialDeals).filter((d) => d.active).length;
+    return acc + (b.isActive !== false ? live : 0);
+  }, 0);
 
   const bizCountEl = document.getElementById('stat-count-businesses');
   const reviewEl = document.getElementById('stat-count-reviews');
@@ -716,14 +766,34 @@ function renderOwnerDashboard() {
   owned.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'owner-card';
-    const activeLabel = biz.isActive === false ? 'Inactive (hidden from public)' : 'Active (visible to public)';
-    const toggleLabel = biz.isActive === false ? 'Set Active' : 'Set Inactive';
+    const isActive = biz.isActive !== false;
+    const toggleLabel = isActive ? 'Set Inactive' : 'Set Active';
+    const deals = parseDeals(biz.specialDeals);
+    const couponsHtml = deals.length
+      ? deals.map(d => `
+        <div class="coupon owner ${d.active ? 'live' : 'inactive'}">
+          <div class="coupon-body">
+            <span class="coupon-title">${d.title}</span>
+            <button class="chip ${d.active ? 'chip-live' : 'chip-inactive'}" data-toggle-deal="${biz.id}|${d.id}">
+              ${d.active ? 'Active' : 'Inactive'}
+            </button>
+          </div>
+        </div>
+      `).join('')
+      : '<p class="muted small">No deals posted yet.</p>';
     card.innerHTML = `
       <h4>${biz.name}</h4>
       <p class="meta">${biz.category} • ${biz.address}</p>
-      <p class="meta">Status: ${activeLabel}</p>
+      <p class="meta status-row">
+        <span class="status-pill ${isActive ? 'status-active' : 'status-inactive'}">
+          ${isActive ? 'Active' : 'Inactive'}
+        </span>
+        <span class="status-note">${isActive ? 'Visible to public' : 'Hidden from public'}</span>
+      </p>
       <p class="meta">Rating: ${biz.averageRating.toFixed(1)} • Reviews: ${biz.reviews?.length || 0}</p>
-      <p class="deal">${biz.specialDeals ? `Deal: ${biz.specialDeals}` : 'No deal posted yet'}</p>
+      <div class="coupon-stack owner-stack">
+        ${couponsHtml}
+      </div>
       <div class="actions">
         <button class="secondary-btn" data-toggle-active="${biz.id}">${toggleLabel}</button>
         <button class="secondary-btn" data-edit="${biz.id}">Edit</button>
@@ -903,6 +973,19 @@ function openDetail(businessId) {
 
   const canEdit = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
   const canReview = currentUser && currentUser.role !== 'guest';
+  const deals = parseDeals(biz.specialDeals);
+  const showInactive = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
+  const filteredDeals = showInactive ? deals : deals.filter((d) => d.active);
+  const couponsHtml = deals.length
+    ? filteredDeals.map(d => `
+      <div class="coupon ${d.active ? 'live' : 'inactive'}">
+        <div class="coupon-body">
+          <span class="coupon-title">${d.title}</span>
+          ${showInactive ? `<span class="coupon-status ${d.active ? 'live' : 'inactive'}">${d.active ? 'Active' : 'Inactive'}</span>` : ''}
+        </div>
+      </div>
+    `).join('')
+    : '<p class="muted">No deals posted yet.</p>';
 
   body.innerHTML = `
     <div class="detail-header">
@@ -934,7 +1017,7 @@ function openDetail(businessId) {
         <a class="secondary-btn inline" href="${mapLink}" target="_blank" rel="noopener">Open in Google Maps</a>
       </div>
     </div>
-    <div class="deal-banner">Special deals: ${biz.specialDeals || 'No deals posted yet.'}</div>
+    <div class="coupon-stack detail-stack">${couponsHtml}</div>
     <div class="detail-actions">
       ${renderFavoriteButton(biz.id)}
       ${canEdit ? `<button class="secondary-btn" data-edit="${biz.id}">Edit Business</button>` : ''}
@@ -1133,7 +1216,17 @@ async function submitBusiness(event) {
   const description = document.getElementById('business-description').value.trim();
   const hours = document.getElementById('business-hours').value.trim();
   const hasDeals = document.getElementById('has-deals').checked;
-  const deals = hasDeals ? document.getElementById('business-deals').value.trim() : '';
+  const dealsArray = [];
+  if (hasDeals && window.__dealForm) {
+    const { dealFields } = window.__dealForm;
+    Array.from(dealFields.children).forEach((row) => {
+      const title = row.querySelector('.deal-title')?.value.trim() || '';
+      const active = row.querySelector('.deal-active-toggle')?.checked;
+      const id = row.dataset.dealId || crypto.randomUUID();
+      if (title) dealsArray.push({ id, title, active });
+    });
+  }
+  const dealsSerialized = hasDeals ? serializeDeals(dealsArray) : '';
   const photoFiles = Array.from(document.getElementById('business-photo-file').files || []).slice(0, MAX_GALLERY_PHOTOS);
   const errorEl = document.getElementById('add-error');
   const successEl = document.getElementById('add-success');
@@ -1191,7 +1284,7 @@ async function submitBusiness(event) {
         biz.address = address;
         biz.shortDescription = description;
         biz.hours = hours;
-        biz.specialDeals = deals;
+        biz.specialDeals = dealsSerialized;
         if (typeof biz.isActive !== 'boolean') biz.isActive = true;
         const { error: updateError } = await supabase.from('businesses').update(mapBusinessToDb(biz)).eq('id', editingId);
         if (updateError) throw updateError;
@@ -1210,7 +1303,7 @@ async function submitBusiness(event) {
         address,
         shortDescription: description,
         hours,
-        specialDeals: deals,
+        specialDeals: dealsSerialized,
         isActive: true,
         ownerUserId: currentUser.id,
         reviews: [],
@@ -1228,6 +1321,12 @@ async function submitBusiness(event) {
 
     await syncBusinessesAndFavorites();
     form.reset();
+    if (window.__dealForm) {
+      const { dealFields, updateDealsVisibility, updateDealLimitNote } = window.__dealForm;
+      dealFields.innerHTML = '';
+      updateDealsVisibility();
+      updateDealLimitNote();
+    }
     setView('owner'); // exit add screen after saving
   } catch (err) {
     console.error('Business save failed', err.message || err);
@@ -1273,6 +1372,35 @@ async function toggleBusinessActive(bizId) {
   }
 }
 
+async function toggleDealActive(bizId, dealId) {
+  // Flip a single deal between active/inactive and persist.
+  if (!currentUser || currentUser.role !== 'owner') return;
+  const biz = businesses.find((b) => b.id === bizId);
+  if (!biz || biz.ownerUserId !== currentUser.id) return;
+  const deals = parseDeals(biz.specialDeals);
+  const target = deals.find((d) => d.id === dealId);
+  if (!target) return;
+  target.active = !target.active;
+  const next = serializeDeals(deals);
+  const previous = biz.specialDeals;
+  biz.specialDeals = next;
+
+  try {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ special_deals: next })
+      .eq('id', bizId)
+      .eq('owner_id', currentUser.id);
+    if (error) throw error;
+    await syncBusinessesAndFavorites();
+    renderOwnerDashboard();
+    renderDealsView();
+  } catch (err) {
+    biz.specialDeals = previous;
+    alert(err?.message || 'Could not update deal.');
+  }
+}
+
 function startEditBusiness(bizId) {
   // Pre-fill the add form with an existing business for editing.
   const biz = businesses.find(b => b.id === bizId);
@@ -1285,9 +1413,16 @@ function startEditBusiness(bizId) {
   document.getElementById('business-address').value = biz.address;
   document.getElementById('business-description').value = biz.shortDescription;
   document.getElementById('business-hours').value = biz.hours;
-  document.getElementById('has-deals').checked = !!biz.specialDeals;
-  document.getElementById('business-deals').disabled = !biz.specialDeals;
-  document.getElementById('business-deals').value = biz.specialDeals;
+  const deals = parseDeals(biz.specialDeals);
+  const hasDeals = document.getElementById('has-deals');
+  hasDeals.checked = deals.length > 0;
+  if (window.__dealForm) {
+    const { dealFields, addDealField, updateDealLimitNote, updateDealsVisibility } = window.__dealForm;
+    dealFields.innerHTML = '';
+    deals.forEach(d => addDealField(d));
+    updateDealsVisibility();
+    updateDealLimitNote();
+  }
   const photoFileInput = document.getElementById('business-photo-file');
   if (photoFileInput) photoFileInput.value = '';
   document.getElementById('add-success').textContent = 'Editing your business. Save changes when ready.';
@@ -1335,11 +1470,77 @@ function bindBusinessFilterEvents() {
   document.getElementById('category-filter').addEventListener('change', renderBusinesses);
   document.getElementById('sort-select').addEventListener('change', renderBusinesses);
   const hasDeals = document.getElementById('has-deals');
-  const dealsField = document.getElementById('business-deals');
-  hasDeals.addEventListener('change', () => {
-    dealsField.disabled = !hasDeals.checked;
-    if (!hasDeals.checked) dealsField.value = '';
+  const dealsEditor = document.getElementById('deals-editor');
+  const addDealBtn = document.getElementById('add-deal-btn');
+  const dealFields = document.getElementById('deal-fields');
+  const limitNote = document.getElementById('deal-limit-note');
+
+  function updateDealsVisibility() {
+    dealsEditor.classList.toggle('hidden', !hasDeals.checked);
+    if (!hasDeals.checked) {
+      dealFields.innerHTML = '';
+      limitNote.textContent = '';
+    } else if (!dealFields.children.length) {
+      addDealField();
+    }
+  }
+
+  hasDeals.addEventListener('change', updateDealsVisibility);
+  addDealBtn.addEventListener('click', () => addDealField());
+  dealFields.addEventListener('click', (e) => {
+    if (e.target.dataset.removeDeal) {
+      e.target.closest('.deal-field')?.remove();
+      updateDealLimitNote();
+    }
   });
+
+  function updateDealLimitNote() {
+    const count = dealFields.children.length;
+    const remaining = MAX_COUPONS - count;
+    limitNote.textContent = remaining <= 0
+      ? 'Coupon limit reached (5). Remove one to add another.'
+      : `You can add ${remaining} more coupon${remaining === 1 ? '' : 's'}.`;
+    addDealBtn.disabled = count >= MAX_COUPONS;
+  }
+
+  function addDealField(deal = { id: crypto.randomUUID(), title: '', active: true }) {
+    if (dealFields.children.length >= MAX_COUPONS) return;
+    const row = document.createElement('div');
+    row.className = 'deal-field';
+    row.dataset.dealId = deal.id;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'deal-title';
+    input.placeholder = '10% off for locals';
+    input.value = deal.title || '';
+
+    const activeLabel = document.createElement('label');
+    activeLabel.className = 'deal-active';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'deal-active-toggle';
+    checkbox.checked = deal.active !== false;
+    activeLabel.appendChild(checkbox);
+    activeLabel.appendChild(document.createTextNode(' Active'));
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'ghost-btn small';
+    removeBtn.dataset.removeDeal = 'true';
+    removeBtn.textContent = 'Remove';
+
+    row.appendChild(input);
+    row.appendChild(activeLabel);
+    row.appendChild(removeBtn);
+    dealFields.appendChild(row);
+    updateDealLimitNote();
+  }
+
+  // Expose helpers to other functions in this module scope.
+  window.__dealForm = { addDealField, updateDealLimitNote, dealFields, hasDeals, updateDealsVisibility };
+  updateDealsVisibility();
+  updateDealLimitNote();
 }
 
 function bindListEvents() {
@@ -1377,6 +1578,10 @@ function bindListEvents() {
       if (e.target.dataset.toggleActive) toggleBusinessActive(e.target.dataset.toggleActive);
       if (e.target.dataset.edit) startEditBusiness(e.target.dataset.edit);
       if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
+      if (e.target.dataset.toggleDeal) {
+        const [bizId, dealId] = e.target.dataset.toggleDeal.split('|');
+        toggleDealActive(bizId, dealId);
+      }
     });
   }
 }

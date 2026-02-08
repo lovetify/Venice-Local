@@ -398,6 +398,7 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   display: flex;
   flex-direction: column;
   height: 100%;
+  gap: 10px;
 }
 .business-photo {
   margin-bottom: 10px;
@@ -417,6 +418,7 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 }
 .business-card .description {
   min-height: 54px;
+  flex: 1;
 }
 
 /* Badges and helper text */
@@ -576,6 +578,137 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 .owner-card .deal { font-weight: 600; margin: 6px 0 8px; color: var(--nav); }
 .owner-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+.status-row { display: flex; align-items: center; gap: 10px; }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid transparent;
+}
+.status-active {
+  background: #e4f2ef;
+  color: var(--nav);
+  border-color: rgba(23, 95, 98, 0.16);
+}
+.status-inactive {
+  background: rgba(242, 124, 87, 0.12);
+  color: var(--primary);
+  border-color: rgba(242, 124, 87, 0.28);
+}
+.status-note { color: #4c5f63; }
+
+.coupon-stack {
+  display: grid;
+  gap: 10px;
+  margin: 6px 0;
+  margin-top: auto;
+}
+.coupon-stack.detail-stack {
+  margin-bottom: 18px;
+}
+.owner-card .coupon-stack {
+  margin-top: 12px;
+  margin-bottom: 16px;
+}
+.coupon {
+  background: #fff;
+  border: 1px dashed rgba(23, 95, 98, 0.32);
+  border-radius: 14px;
+  box-shadow: 0 10px 20px rgba(23, 95, 98, 0.08);
+  padding: 10px 12px;
+}
+.coupon.owner { box-shadow: none; }
+.coupon.inactive {
+  opacity: 0.7;
+  border-color: rgba(242, 124, 87, 0.4);
+}
+.coupon-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.coupon-title { font-weight: 700; color: var(--hero-dark); }
+.coupon-status.live {
+  color: var(--nav);
+  font-weight: 700;
+}
+.coupon-status.inactive {
+  color: var(--primary);
+  font-weight: 700;
+}
+.coupon-stack .chip {
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  font-weight: 700;
+  cursor: pointer;
+  background: #fff;
+}
+.chip-live {
+  color: var(--nav);
+  border-color: rgba(23, 95, 98, 0.2);
+}
+.chip-inactive {
+  color: var(--primary);
+  border-color: rgba(242, 124, 87, 0.3);
+}
+
+.secondary-btn.small { padding: 8px 12px; font-size: 14px; }
+
+.coupon-editor {
+  border: 1px dashed rgba(23, 95, 98, 0.2);
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fbfa;
+  display: grid;
+  gap: 10px;
+}
+.coupon-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.deal-fields { display: grid; gap: 8px; }
+.deal-field {
+  display: grid;
+  grid-template-columns: 1fr 90px 96px;
+  align-items: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+.deal-field .deal-title {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(23, 95, 98, 0.25);
+  font-size: 15px;
+  height: 42px;
+}
+.deal-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--nav);
+  justify-self: end;
+  height: 34px;
+  padding: 0 8px;
+}
+.deal-field .ghost-btn.small {
+  padding: 8px 10px;
+  justify-self: end;
+  min-width: 96px;
+  height: 34px;
+  margin-top: 0;
+}
+
 .section-header { margin: 10px 0 16px; }
 .form-card form button { margin-top: 14px; }
 
@@ -602,14 +735,16 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 }
 
 .lightbox .lightbox-content {
-  background: #000;
-  padding: 10px;
+  background: #fff;
+  padding: 14px;
   width: min(90vw, 900px);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  border-radius: 18px;
+  box-shadow: 0 16px 38px rgba(17, 65, 67, 0.32);
 }
 .lightbox img {
   max-width: 100%;
@@ -617,7 +752,7 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   object-fit: contain;
 }
 .lightbox .close-btn {
-  color: #fff;
+  color: var(--nav);
 }
 .lightbox-controls {
   display: flex;

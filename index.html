@@ -226,7 +226,14 @@
             <label class="checkbox-inline">
               <input type="checkbox" id="has-deals"> Add a special deal?
             </label>
-            <label>Special Deals / Coupons<textarea id="business-deals" rows="2" placeholder="10% off for locals" disabled></textarea></label>
+            <div id="deals-editor" class="coupon-editor hidden">
+              <div class="coupon-editor-header">
+                <span class="muted small">Add up to 5 coupons. Toggle “Active” to hide without deleting.</span>
+                <button type="button" class="secondary-btn small" id="add-deal-btn">+ Add coupon</button>
+              </div>
+              <div id="deal-fields" class="deal-fields"></div>
+              <p class="muted small" id="deal-limit-note"></p>
+            </div>
             <div class="photo-inputs">
               <label>Business Photos (Upload multiple)<input type="file" id="business-photo-file" accept="image/*" multiple></label>
               <p class="muted small">Add up to 5 photos. First photo shows on cards; others appear in the gallery.</p>
