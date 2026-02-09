@@ -551,6 +551,7 @@ function renderBusinesses() {
   filtered.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'card business-card';
+    card.dataset.detail = biz.id;
     const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
     const hasDeal = parseDeals(biz.specialDeals).some((d) => d.active);
     card.innerHTML = `
@@ -569,7 +570,6 @@ function renderBusinesses() {
         ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
         <div>
           ${renderFavoriteButton(biz.id)}
-          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
         </div>
       </div>
     `;
@@ -599,6 +599,7 @@ function renderFavoritesView() {
   savedBusinesses.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'card business-card';
+    card.dataset.detail = biz.id;
     const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
     const hasDeal = parseDeals(biz.specialDeals).some((d) => d.active);
     card.innerHTML = `
@@ -617,7 +618,6 @@ function renderFavoritesView() {
         ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
         <div>
           <button class="secondary-btn fav-btn saved" data-fav="${biz.id}">♥ Saved</button>
-          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
         </div>
       </div>
     `;
@@ -655,6 +655,7 @@ function renderDealsView() {
   deals.forEach(biz => {
     const card = document.createElement('div');
     card.className = 'card business-card';
+    card.dataset.detail = biz.id;
     const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
     const activeDeals = parseDeals(biz.specialDeals).filter((d) => d.active);
     const coupons = activeDeals.map((d) => `
@@ -681,7 +682,6 @@ function renderDealsView() {
       <div class="card-footer">
         <div>
           ${renderFavoriteButton(biz.id)}
-          <button class="ghost-btn" data-detail="${biz.id}">Details</button>
         </div>
       </div>
     `;
@@ -845,6 +845,12 @@ async function signUp(event) {
     return;
   }
   try {
+    // If a session somehow still exists, clear it before creating another account.
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+      await supabase.auth.signOut();
+    }
+
     const avatar = avatarFile ? await readFileAsDataURL(avatarFile) : (avatarUrl || DEFAULT_AVATAR);
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -918,14 +924,22 @@ function enterApp() {
   setView('list');
 }
 
-function logout() {
+async function logout() {
   // Clear session info and return to the auth screen.
   currentUser = null;
-  supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn('Sign out encountered an issue, continuing with local reset.', err?.message || err);
+  }
   document.getElementById('auth-screen').classList.remove('hidden');
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('signin-form').reset();
   document.getElementById('signup-form').reset();
+  const signupError = document.getElementById('signup-error');
+  const signinError = document.getElementById('signin-error');
+  if (signupError) signupError.textContent = '';
+  if (signinError) signinError.textContent = '';
   showAuthCard('choice');
   const profileForm = document.getElementById('profile-photo-form');
   if (profileForm) profileForm.reset();
@@ -977,6 +991,7 @@ function openDetail(businessId) {
 
   const canEdit = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
   const canReview = currentUser && currentUser.role !== 'guest';
+  const hasUserReview = !!(currentUser && biz.reviews?.some((r) => r.userId === currentUser.id));
   const deals = parseDeals(biz.specialDeals);
   const showInactive = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
   const filteredDeals = showInactive ? deals : deals.filter((d) => d.active);
@@ -1028,7 +1043,7 @@ function openDetail(businessId) {
     </div>
     <h3>Reviews (${reviewCount})</h3>
     <div class="reviews">${reviewsHTML}</div>
-    ${canReview ? reviewFormTemplate(biz.id) : '<p class="muted">Sign in to leave a review.</p>'}
+    ${!canReview ? '<p class="muted">Sign in to leave a review.</p>' : hasUserReview ? '<p class="muted">You already reviewed this business. Each account can leave one review per business.</p>' : reviewFormTemplate(biz.id)}
   `;
 
   modal.classList.remove('hidden');
@@ -1080,6 +1095,14 @@ async function submitReview(form) {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submitting...';
   }
+  const fail = (message) => {
+    errorEl.textContent = message;
+    form.dataset.submitting = 'false';
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalSubmitText;
+    }
+  };
 
   const rating = ratingInput ? Number(ratingInput.value) : 0;
   const comment = commentInput.value.trim();
@@ -1087,29 +1110,36 @@ async function submitReview(form) {
   const photoFiles = photoFileInput ? Array.from(photoFileInput.files || []) : [];
 
   if (!rating || rating < 1 || rating > 5) {
-    errorEl.textContent = 'Rating must be between 1 and 5.';
+    fail('Rating must be between 1 and 5.');
     return;
   }
   if (!comment) {
-    errorEl.textContent = 'Please add a short comment.';
+    fail('Please add a short comment.');
     return;
   }
   if (photoUrlText && /[\n,]/.test(photoUrlText)) {
     // Some people paste multiple links by accident; we only allow one image.
-    errorEl.textContent = 'One image per review only.';
+    fail('One image per review only.');
     return;
   }
   if (photoFiles.length > 1) {
-    errorEl.textContent = 'One image per review only.';
+    fail('One image per review only.');
     return;
   }
   if (photoUrlText && photoFiles.length) {
-    errorEl.textContent = 'Use either one photo URL or one uploaded image.';
+    fail('Use either one photo URL or one uploaded image.');
     return;
   }
 
   const biz = businesses.find(b => b.id === bizId);
-  if (!biz) return;
+  if (!biz) {
+    fail('Business not found.');
+    return;
+  }
+  if (biz.reviews?.some((r) => r.userId === currentUser.id)) {
+    fail('You already reviewed this business.');
+    return;
+  }
 
   const newReview = {
     userId: currentUser.id,
@@ -1556,28 +1586,41 @@ function bindBusinessFilterEvents() {
 function bindListEvents() {
   // Wire interactions from rendered list cards.
   document.getElementById('business-list').addEventListener('click', (e) => {
-    if (e.target.dataset.detail) {
-      openDetail(e.target.dataset.detail);
-    }
     if (e.target.dataset.fav) {
       toggleFavorite(e.target.dataset.fav);
+      return;
+    }
+    const card = e.target.closest('.business-card');
+    if (card?.dataset.detail) {
+      openDetail(card.dataset.detail);
     }
   });
 
   document.getElementById('favorites-list').addEventListener('click', (e) => {
-    if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
-    if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
+    if (e.target.dataset.fav) {
+      toggleFavorite(e.target.dataset.fav);
+      return;
+    }
+    const card = e.target.closest('.business-card');
+    if (card?.dataset.detail) openDetail(card.dataset.detail);
   });
 
   const dealsList = document.getElementById('deals-list');
   if (dealsList) {
     dealsList.addEventListener('click', (e) => {
-      if (e.target.dataset.detail) openDetail(e.target.dataset.detail);
-      if (e.target.dataset.fav) toggleFavorite(e.target.dataset.fav);
+      if (e.target.dataset.fav) {
+        toggleFavorite(e.target.dataset.fav);
+        return;
+      }
       if (e.target.dataset.photos) {
         const photos = e.target.dataset.photos.split('|').filter(Boolean);
         const start = Number(e.target.dataset.index) || 0;
         openPhotoLightbox(photos, start);
+        return;
+      }
+      const card = e.target.closest('.business-card');
+      if (card?.dataset.detail) {
+        openDetail(card.dataset.detail);
       }
     });
   }

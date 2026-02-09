@@ -2,119 +2,214 @@
 
 ![Venice Local logo](assets/Copy%20of%20Venice%20Local.png)
 
-Welcome to Venice Local! This is our 2025-2026 FBLA Coding & Programming Project. Venice Local is a desktop application designed to help users discover and support small, local businesses in Venice, Florida.
-
-Local business owners can add their businesses to the app, and community members can browse listings, leave reviews, and save their favorite places. If a business is offering a special deal or promotion, it will be displayed on the business's listing. The app uses a backend created with Supabase to securely store business listings, reviews, and user data so information is saved and updated in real time. The goal of this project is to strengthen the local community by making it easier for people to find and support nearby businesses. All business entries represent real small local businesses in Downtown Venice, FL, and details (hours, descriptions, addresses, photos, etc.) were gathered from TripAdvisor and Yelp.
+Venice Local is our **2025-2026 FBLA Coding & Programming** project. It helps people discover and support small businesses in Downtown Venice, Florida.
 
 ---
 
-## Key Features
-- Search and filter businesses by name and category, with sorting by rating, review count, or name.
-- Detailed profiles with hours, description, address, category, special deals, and live average ratings.
-- Reviews: leave 1-5 star ratings with comments and optional photos; see community feedback in real time.
-- Favorites: save and manage a personal list of favorite businesses for quick access.
-- Deals: highlight active specials and show deal counts for business owners.
-- Roles: guest browsing, customer reviews/favorites, and business owner tools to add or edit listings.
+## Project Overview
+
+### Problem We Solved
+Small local businesses are easy to miss online, and people do not always have one simple place to browse real local options, check reviews, and find active deals.
+
+### Our Solution
+Venice Local combines business discovery, ratings/reviews, favorites, owner tools, and report analytics in one app powered by Supabase.
 
 ---
 
-## Get the Project
-- GitHub: https://github.com/koreenahickey-cmd/Venice-Local.git (Code -> Download ZIP) or `git clone (https://github.com/koreenahickey-cmd/Venice-Local.git)`
+## Feature Highlights (Rubric-Focused)
 
-## Open and Run (browser)
-1) Download or clone the repo, then open Terminal or PowerShell in the project folder.  
-2) Launch a static server: `python3 -m http.server 4173` (or `py -m http.server 4173` on Windows).  
-3) Open `http://localhost:4173/` in your browser.
+### Core Features
+- **Business Directory** with category, address, hours, descriptions, photos, ratings, and deals
+- **Search + Filter + Sort** (highest rating, most reviewed, alphabetical)
+- **Reviews & Ratings** (1-5 stars, comment, optional photo)
+- **Favorites** save/remove system
+- **Deals** with active/inactive status
+
+### Owner Features
+- **Role-based access** (guest/customer/owner)
+- **Owner Dashboard** stats (business count, review count, avg rating, active deals)
+- **Business management** (add/edit/toggle active)
+
+### Unique / Intelligent Features
+- **Reports page** with app-wide analytics
+- **CSV export** for report output
+- **Deal format compatibility parsing** (legacy + structured)
+- **Image handling strategy** (upload URLs + signed storage paths)
+- **Cloudflare Turnstile** bot check on auth
 
 ---
 
-## Project Structure (key files)
+## Rubric Alignment Snapshot
+
+| Rubric Area | How Venice Local Addresses It |
+|---|---|
+| Program functionality | Full flow: auth, browse, review, favorite, owner management |
+| Data handling | Supabase-backed businesses, profiles, reviews, favorites, deals, photos |
+| Report output / analysis | Reports page + category table + top lists + CSV export |
+| Validation / error handling | Required fields, role checks, duplicate-submit guards, RLS-aware feedback |
+| UX / navigation | Clear nav, role-specific views, modal details, empty states |
+| Code quality | Modular helpers in `modules/` + comments |
+| Accessibility | Labeled controls, readable structure, alt/fallback images |
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | HTML, CSS, JavaScript (ES Modules) |
+| Backend/Data | Supabase (Auth, Postgres, Storage, REST) |
+| Security Check | Cloudflare Turnstile |
+| Maps | Google Maps Embed |
+| Local Server | Python `http.server` |
+
+---
+
+## How to Open and Run (Detailed)
+
+### Prerequisites
+- Python 3.x installed
+- Modern browser (Chrome, Edge, Safari, or Firefox)
+- Internet connection (needed for Supabase, Turnstile, and Maps)
+
+### Method #1 (Recommended)
+1. Open this GitHub repo:
+```text
+https://github.com/koreenahickey-cmd/Venice-Local.git
 ```
-Venice-Local/
-- assets/                 # images and static assets
-- index.html              # main app HTML
-- renderer.js             # renderer process logic
-- modules/                # split helpers (deals, reports, UI utils)
-- supabaseClient.js       # Supabase client setup
-- styles.css              # global styles
-- service-worker.js       # service worker cleanup support
-- json files/manifest.json
-- json files/package.json
-- json files/package-lock.json
+2. Click the green **Code** button, then either **Download ZIP** or copy the HTTPS URL.
+3. Open the folder in your IDE.
+4. Paste the following into the terminal based on your operating system to start a local server:
+
+- **macOS / Linux (Terminal):**
+```bash
+python3 -m http.server 4173
 ```
 
----
+- **Windows PowerShell:**
+```bash
+py -m http.server 4173
+```
 
-## Directions to Use
-To use Venice Local, launch the application and browse through local businesses listed in Venice, FL. Users can explore businesses by category, view details, leave reviews, and bookmark their favorite businesses for easy access later. Business owners can also submit their own businesses to be featured in the app.
+- **Windows CMD (Command Prompt):**
+```bash
+python -m http.server 4173
+```
 
----
+5. Keep that terminal open.
+6. Open this in your browser:
+```text
+http://localhost:4173/
+```
+7. The app should load to the auth screen.
 
-## Accessibility
-- Semantic structure uses labeled form controls, heading hierarchy, and descriptive button text for screen reader clarity.
-- Keyboard navigation is supported across auth forms, filters, cards, modal close controls, and profile/settings actions.
-- Focus visibility is preserved through native controls and button styles so users can track current position.
-- Images include alt text and fallback behavior (avatars/business photos) to reduce broken-context scenarios.
-- Color choices keep high contrast for primary text and call-to-action elements against light card backgrounds.
+### Method #2 (package script)
+1. Open terminal in project root.
+2. Run:
+```bash
+npm run start --prefix "json files"
+```
+3. Open:
+```text
+http://localhost:4173/
+```
 
----
-
-## Testing Checklist (Manual QA)
-- Authentication:
-  - Sign up as customer and owner with valid inputs.
-  - Verify bot check blocks submit when incomplete.
-  - Sign in/out restores correct screen state.
-- Business browsing:
-  - Search by name/keyword.
-  - Filter by each category.
-  - Sort by rating, most reviewed, alphabetical.
-- Details and reviews:
-  - Open detail modal from list/favorites/deals.
-  - Submit review with rating/comment and optional photo.
-  - Confirm average rating and review count update after refresh.
-- Favorites:
-  - Save and unsave businesses.
-  - Verify favorites list reflects changes.
-- Deals:
-  - Add/edit active and inactive deals as owner.
-  - Confirm Local Deals view only shows active deals.
-- Owner dashboard:
-  - Add business, edit business, toggle active/inactive.
-  - Verify dashboard stats (businesses, reviews, avg rating, active deals).
-- Reports:
-  - Open Reports section and verify summary values populate.
-  - Export CSV and confirm file includes summary, categories, and top-5 sections.
-
----
-
-## Developers
-Koreena Hickey  
-Emma Nguyen  
+### Quick Troubleshooting
+- If port `4173` is busy, stop other local servers and rerun.
+- If page opens but data is empty, check internet and refresh once.
+- If sign in says bot check incomplete, finish the Turnstile box and retry.
 
 ---
 
 ## Default Accounts
-- Business owner - email: `businessowner@gmail.com`, password: `FBLA2025`  
-- Reviewer - email: `reviewer@gmail.com`, password: `FBLA2025`
+- **Business owner**: `businessowner@gmail.com` / `FBLA2025`
+- **Reviewer**: `reviewer@gmail.com` / `FBLA2025`
 
 ---
 
-## Software & Languages Used
-Visual Studio Code  
-GitHub  
-Adobe Photoshop  
-Supabase  
-JavaScript  
-HTML  
-CSS  
+## How to Use
+1. Sign in, create an account, or continue as guest.
+2. Browse All Businesses, then search/filter/sort.
+3. Open Details to view photos, map, deals, and reviews.
+4. Save favorites and write reviews (non-guest accounts).
+5. If owner, add/edit your business and manage deals.
+6. Open Reports to view analytics and export CSV.
 
 ---
 
-## Credits
-App logo created by Emma Nguyen.  
-Typography: Copasetic font by Font Diner (sourced from DaFont).
+## Reports and Data Analysis
+The Reports section includes:
+- Total businesses
+- Active businesses
+- Total reviews
+- Average rating
+- Active deal count
+- Category breakdown table
+- Top 5 highest rated businesses
+- Top 5 most reviewed businesses
+- CSV export for judge-friendly report output
+
+---
+
+## Accessibility Notes
+- Labeled form controls and readable heading structure
+- Keyboard-friendly interactions for main workflows
+- Alt text and fallback images for avatars/business photos
+- Visible feedback states for errors and success messaging
+
+---
+
+## Validation and Reliability
+- Required fields enforced for business creation and reviews
+- Review constraints (single photo source, valid rating range)
+- Role checks prevent guest-only restricted actions
+- Supabase policy-aware error feedback for blocked operations
+- Duplicate-submit guards on review and business forms
+
+---
+
+## Project Structure (Key Files)
+```text
+Venice-Local/
+- index.html
+- styles.css
+- renderer.js
+- supabaseClient.js
+- modules/
+  - deals.js
+  - reports.js
+  - uiUtils.js
+- assets/
+  - vendor/supabase.js
+  - images and branding assets
+- service-worker.js
+- json files/
+  - manifest.json
+  - package.json
+  - package-lock.json
+```
+
+---
+
+## Documentation of Resources
+- Supabase: authentication, database, and storage backend
+- Cloudflare Turnstile: bot/human verification on auth forms
+- Google Maps Embed: location visualization in business detail view
+- TripAdvisor + Yelp: source references for business details
+- DaFont (Font Diner / Copasetic): typography resource attribution
+
+---
+
+## Developers
+- Koreena Hickey
+- Emma Nguyen
+
+---
+
+## License
+This project is submitted for FBLA Coding & Programming. See `LICENSE` for repository license details.
 
 ---
 
 ## Contact
-For any questions please email emmanguyen0915@gmail.com!
+For questions: **emmanguyen0915@gmail.com**

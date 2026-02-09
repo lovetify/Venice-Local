@@ -400,6 +400,9 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   height: 100%;
   gap: 10px;
 }
+.business-card[data-detail] {
+  cursor: pointer;
+}
 .business-photo {
   margin-bottom: 10px;
   overflow: hidden;
