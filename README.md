@@ -12,11 +12,11 @@ Venice Local is our **2025-2026 FBLA Coding & Programming** project. It helps pe
 Small local businesses are easy to miss online, and people do not always have one simple place to browse real local options, check reviews, and find active deals.
 
 ### Our Solution
-Venice Local combines business discovery, ratings/reviews, favorites, owner tools, and report analytics in one app powered by Supabase.
+Venice Local combines local business discovery, ratings/reviews, favorites, owner tools, and report analytics in one user-friendly app powered by Supabase.
 
 ---
 
-## Feature Highlights (Rubric-Focused)
+## Feature Highlights
 
 ### Core Features
 - **Business Directory** with category, address, hours, descriptions, photos, ratings, and deals
@@ -62,6 +62,18 @@ Venice Local combines business discovery, ratings/reviews, favorites, owner tool
 | Security Check | Cloudflare Turnstile |
 | Maps | Google Maps Embed |
 | Local Server | Python `http.server` |
+
+---
+
+### Language Selection Process
+
+We selected **HTML, CSS, and JavaScript (ES Modules)** as our primary implementation languages after evaluating platform fit, maintainability, and deployment constraints for a browser-based product.
+
+- **HTML** was chosen as the semantic document layer because it provides accessible, standards-based structure for forms, navigation, and content hierarchy.
+- **CSS** was chosen for presentation and responsive layout so we could separate styling concerns from application logic and maintain a consistent UI system.
+- **JavaScript (ES Modules)** was chosen for client-side application logic because it supports modular architecture (`modules/`), event-driven UI updates, and direct integration with REST-style backend services (Supabase APIs).
+- We intentionally used a **frontend-first architecture** (no custom server runtime) to reduce hosting complexity, improve portability across devices, and simplify local execution for judging and demonstration.
+- This stack aligns with current industry practice for lightweight web applications: **standards-compliant markup**, **componentized styling**, and **modular scripting** with external managed backend services.
 
 ---
 
@@ -197,6 +209,20 @@ Venice-Local/
 - Google Maps Embed: location visualization in business detail view
 - TripAdvisor + Yelp: source references for business details
 - DaFont (Font Diner / Copasetic): typography resource attribution
+
+---
+
+## Image Credits
+
+Business images displayed in this application are the property of their
+respective businesses and were sourced from publicly available images on Google
+for educational and demonstration purposes only.
+
+Sources include:
+• Google Search (public business listings)
+• Google Maps (public business listings)
+
+No ownership is claimed over these images.
 
 ---
 
