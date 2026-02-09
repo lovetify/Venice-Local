@@ -93,6 +93,22 @@ function setBusinessLoadError(message = '') {
   if (el) el.textContent = message;
 }
 
+function showLoadingOverlay() {
+  const overlay = document.getElementById('loading-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('hidden', 'fade-out');
+}
+
+function hideLoadingOverlay() {
+  const overlay = document.getElementById('loading-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  overlay.classList.add('fade-out');
+  window.setTimeout(() => {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('fade-out');
+  }, 250);
+}
+
 async function restGet(path) {
   // Use plain fetch to Supabase REST and prefer the signed-in access token for RLS-protected tables.
   const url = `${SUPABASE_URL}/rest/v1${path}`;
@@ -1703,36 +1719,42 @@ function bindEvents() {
 // -----------------------------
 async function initSession() {
   // Restore an existing Supabase session if available.
-  const { data } = await supabase.auth.getSession();
-  const session = data?.session;
-  if (session?.user) {
-    // If auth session exists, hydrate profile and jump straight into app view.
-    const profile = await fetchProfile(session.user.id);
-    currentUser = {
-      id: session.user.id,
-      name: profile?.name || session.user.user_metadata?.name || session.user.email,
-      email: session.user.email,
-      role: profile?.role || session.user.user_metadata?.role || 'patron',
-      avatar: profile?.avatar || session.user.user_metadata?.avatar || DEFAULT_AVATAR
-    };
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-screen').classList.remove('hidden');
-    updateRoleVisibility();
-    renderProfile();
-  } else {
-    document.getElementById('auth-screen').classList.remove('hidden');
-    document.getElementById('app-screen').classList.add('hidden');
+  try {
+    const { data } = await supabase.auth.getSession();
+    const session = data?.session;
+    if (session?.user) {
+      // If auth session exists, hydrate profile and jump straight into app view.
+      const profile = await fetchProfile(session.user.id);
+      currentUser = {
+        id: session.user.id,
+        name: profile?.name || session.user.user_metadata?.name || session.user.email,
+        email: session.user.email,
+        role: profile?.role || session.user.user_metadata?.role || 'patron',
+        avatar: profile?.avatar || session.user.user_metadata?.avatar || DEFAULT_AVATAR
+      };
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-screen').classList.remove('hidden');
+      updateRoleVisibility();
+      renderProfile();
+    } else {
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('app-screen').classList.add('hidden');
+    }
+    await checkBusinessPhotoSupport();
+    await syncBusinessesAndFavorites();
+  } finally {
+    hideLoadingOverlay();
   }
-  await checkBusinessPhotoSupport();
-  await syncBusinessesAndFavorites();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
   // Kick off event wiring, assets, and a fresh data sync.
+  showLoadingOverlay();
   bindEvents();
   showAuthCard('choice');
   applyStaticAssets();
   setupHelpToggle();
+  setupOnboardingStrip();
   setupLightbox();
   initSession();
 
@@ -1767,6 +1789,40 @@ function setupHelpToggle() {
   closeBtn.addEventListener('click', close);
   panel.addEventListener('click', (e) => {
     if (e.target === panel) close();
+  });
+}
+
+function setupOnboardingStrip() {
+  // Show quick tips one time, then remember dismissal.
+  const strip = document.getElementById('onboarding-strip');
+  const closeBtn = document.getElementById('onboarding-close');
+  if (!strip || !closeBtn) return;
+
+  const storageKey = 'venice_local_onboarding_dismissed';
+  let dismissed = false;
+  try {
+    dismissed = window.localStorage.getItem(storageKey) === '1';
+  } catch {
+    dismissed = false;
+  }
+  if (!dismissed) strip.classList.remove('hidden');
+
+  const dismiss = () => {
+    strip.classList.add('hidden');
+    try {
+      window.localStorage.setItem(storageKey, '1');
+    } catch {
+      // Ignore storage issues and keep going.
+    }
+  };
+
+  closeBtn.addEventListener('click', dismiss);
+  strip.querySelectorAll('[data-onboarding-target]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-onboarding-target');
+      if (target) setView(target);
+      dismiss();
+    });
   });
 }
 

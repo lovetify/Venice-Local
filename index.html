@@ -14,6 +14,16 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="loading-overlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-card">
+      <img class="veniceLogo loading-logo" alt="Venice Local palm logo">
+      <p class="loading-title">Loading Venice Local...</p>
+      <p class="muted small">Warming up local businesses, deals, and reviews.</p>
+      <div class="loading-dots" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
   <!-- Authentication flow (signup/signin/guest) -->
   <div id="auth-screen" class="screen">
     <div class="auth-container">
@@ -155,6 +165,18 @@
           </div>
           <div id="role-note" class="muted"></div>
           <p id="business-load-error" class="error small"></p>
+        </div>
+        <div id="onboarding-strip" class="card onboarding-strip hidden" role="status" aria-live="polite">
+          <div class="onboarding-copy">
+            <p class="onboarding-title">New to Venice Local?</p>
+            <p class="muted small">Quick start: find deals, save favorites, and check reports in one place.</p>
+            <div class="onboarding-actions">
+              <button type="button" class="ghost-btn small" data-onboarding-target="deals">Explore Deals</button>
+              <button type="button" class="ghost-btn small" data-onboarding-target="favorites">View Favorites</button>
+              <button type="button" class="ghost-btn small" data-onboarding-target="reports">Open Reports</button>
+            </div>
+          </div>
+          <button type="button" class="ghost-btn small onboarding-close" id="onboarding-close" aria-label="Dismiss onboarding">Dismiss</button>
         </div>
         <div id="business-list" class="card-grid"></div>
         <p id="empty-list" class="empty-text hidden">No businesses found. Be the first to add one!</p>
