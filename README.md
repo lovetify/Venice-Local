@@ -77,7 +77,7 @@ We selected **HTML, CSS, and JavaScript (ES Modules)** as our primary implementa
 
 ---
 
-## How to Open and Run (Detailed)
+## How to Open and Run
 
 ### Prerequisites
 - Python 3.x installed
