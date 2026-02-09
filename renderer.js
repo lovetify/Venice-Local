@@ -2,6 +2,9 @@
 // Now uses Supabase for auth and business storage so data syncs across devices.
 
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient.js';
+import { parseDeals, serializeDeals } from './modules/deals.js';
+import { buildReportCsv, calculateReportData, renderReportList } from './modules/reports.js';
+import { buildAvatarPlaceholder, buildMapUrls, calculateAverage, renderRatingChip } from './modules/uiUtils.js';
 
 // --- Supabase configuration and asset references (updated) ---
 const assetUrl = (file) => new URL(`./assets/${file}`, window.location.href).href;
@@ -23,29 +26,6 @@ let businessPhotoSupported = false;
 // -----------------------------
 // Utility helpers
 // -----------------------------
-function calculateAverage(reviews = []) {
-  // Compute a rounded average rating from a list of reviews.
-  if (!reviews.length) return 0;
-  const sum = reviews.reduce((acc, r) => acc + Number(r.rating), 0);
-  return Math.round((sum / reviews.length) * 10) / 10;
-}
-
-function renderRatingChip(biz) {
-  // Show rating and, when present, review count in parentheses.
-  const rating = Number(biz?.averageRating || 0).toFixed(1);
-  const reviewCount = biz?.reviews?.length || 0;
-  return `<div class="rating-chip"><span class="star">⭐</span><span>${rating}</span>${reviewCount ? `<span class="rating-count">(${reviewCount})</span>` : ''}</div>`;
-}
-
-function buildMapUrls(biz) {
-  // Prepare embed and link URLs for Google Maps.
-  const query = encodeURIComponent(`${biz.name} ${biz.address}`);
-  const embed = MAPS_API_KEY
-    ? `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${query}`
-    : `https://www.google.com/maps?q=${query}&output=embed`;
-  const link = `https://www.google.com/maps/search/?api=1&query=${query}`;
-  return { embed, link };
-}
 
 function mapBusinessFromDb(row) {
   // Convert a Supabase row into the shape the UI expects.
@@ -81,68 +61,6 @@ function mapBusinessToDb(biz) {
     reviews: biz.reviews || [],
     average_rating: biz.averageRating || 0
   };
-}
-
-// Deal helpers keep compatibility with the old single-string specialDeals field.
-function parseDeals(raw) {
-  if (!raw) return [];
-  const normalizeDeals = (value) => {
-    if (Array.isArray(value)) {
-      return value
-        .map((d) => ({
-          id: d?.id || crypto.randomUUID(),
-          title: d?.title || d?.text || '',
-          active: d?.active !== false
-        }))
-        .filter((d) => d.title.trim());
-    }
-    if (value && typeof value === 'object') {
-      const single = {
-        id: value.id || crypto.randomUUID(),
-        title: value.title || value.text || '',
-        active: value.active !== false
-      };
-      return single.title.trim() ? [single] : [];
-    }
-    return null;
-  };
-
-  // Handle JSON, including values that were accidentally stringified twice.
-  if (typeof raw === 'string') {
-    let candidate = raw.trim();
-    for (let i = 0; i < 2; i += 1) {
-      if (!candidate) break;
-      try {
-        const parsed = JSON.parse(candidate);
-        const normalized = normalizeDeals(parsed);
-        if (normalized) return normalized;
-        if (typeof parsed === 'string') {
-          candidate = parsed.trim();
-          continue;
-        }
-        break;
-      } catch (e) {
-        break;
-      }
-    }
-  } else {
-    const normalized = normalizeDeals(raw);
-    if (normalized) return normalized;
-  }
-
-  // Fallback: treat each non-empty line as an active deal.
-  return String(raw)
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((title) => ({ id: crypto.randomUUID(), title, active: true }));
-}
-
-function serializeDeals(deals = []) {
-  const cleaned = deals
-    .filter((d) => d.title && d.title.trim())
-    .map((d) => ({ id: d.id || crypto.randomUUID(), title: d.title.trim(), active: d.active !== false }));
-  return cleaned.length ? JSON.stringify(cleaned) : '';
 }
 
 async function fetchProfile(userId) {
@@ -233,6 +151,7 @@ async function fetchBusinessPhotosForBusinesses(ids = []) {
     if (error) throw error;
 
     const rows = data || [];
+    // We separate "normal URLs" from storage paths because storage paths need signed links.
     const pendingSignedEntries = [];
     const signedPathSet = new Set();
 
@@ -244,6 +163,7 @@ async function fetchBusinessPhotosForBusinesses(ids = []) {
 
       const storagePath = extractStoragePath(raw);
       if (!storagePath) {
+        // Already public URL (or data URL) so we can keep it as-is.
         const normalizedUrl = toPublicBusinessPhotoUrl(raw);
         if (normalizedUrl) map[row.business_id].push(normalizedUrl);
         return;
@@ -256,6 +176,7 @@ async function fetchBusinessPhotosForBusinesses(ids = []) {
     if (pendingSignedEntries.length) {
       const signedMap = {};
       const paths = Array.from(signedPathSet);
+      // One batch call is faster than asking Supabase for each image one by one.
       const { data: signedData, error: signedError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .createSignedUrls(paths, 60 * 60 * 24 * 7);
@@ -268,6 +189,7 @@ async function fetchBusinessPhotosForBusinesses(ids = []) {
       }
 
       pendingSignedEntries.forEach((entry) => {
+        // Try signed URL first, then fallback to public URL path if needed.
         const resolved = signedMap[entry.storagePath] || toPublicBusinessPhotoUrl(entry.storagePath) || toPublicBusinessPhotoUrl(entry.raw);
         if (resolved) map[entry.businessId].push(resolved);
       });
@@ -288,6 +210,7 @@ async function fetchBusinesses() {
     const data = await restGet('/businesses?select=*&order=name.asc');
     const mapped = (data ?? []).map(mapBusinessFromDb).filter(Boolean);
     const ids = mapped.map((b) => b.id);
+    // Pull reviews + photos together so cards/detail views are ready right away.
     const [reviewMap, photoMap] = await Promise.all([
       fetchReviewsForBusinesses(ids),
       fetchBusinessPhotosForBusinesses(ids)
@@ -330,14 +253,8 @@ async function syncBusinessesAndFavorites() {
   renderBusinesses();
   renderFavoritesView();
   renderDealsView();
+  renderReportsView();
   if (currentUser?.role === 'owner') renderOwnerDashboard();
-}
-
-function buildAvatarPlaceholder(name = 'Guest') {
-  // Generate a simple fallback SVG avatar for missing photos.
-  const initial = (name.trim()[0] || 'G').toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="100%" height="100%" rx="18" fill="%23175f62"/><text x="50%" y="55%" font-family="Manrope, Arial, sans-serif" font-size="70" fill="%23ffffff" text-anchor="middle" dominant-baseline="middle">${initial}</text></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 async function checkBusinessPhotoSupport() {
@@ -448,10 +365,12 @@ function setView(target) {
   if (selected) {
     selected.classList.remove('hidden');
     selected.classList.add('animate-in');
+    // Tiny animation timeout so sections don't keep animating forever.
     setTimeout(() => selected.classList.remove('animate-in'), 350);
     if (target === 'owner') renderOwnerDashboard();
     if (target === 'favorites') renderFavoritesView();
     if (target === 'deals') renderDealsView();
+    if (target === 'reports') renderReportsView();
   }
 }
 
@@ -598,6 +517,17 @@ async function updateProfilePhoto(event) {
   }
 }
 
+function sortBusinessesBySelection(items, sortBy) {
+  // Tiny helper so list/deals sorting stays consistent.
+  if (sortBy === 'rating') {
+    items.sort((a, b) => b.averageRating - a.averageRating);
+  } else if (sortBy === 'reviews') {
+    items.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
+  } else if (sortBy === 'alpha') {
+    items.sort((a, b) => a.name.localeCompare(b.name));
+  }
+}
+
 function renderBusinesses() {
   // Render the main business list with filters and sorting.
   const listEl = document.getElementById('business-list');
@@ -614,13 +544,7 @@ function renderBusinesses() {
     return matchesSearch && matchesCategory;
   });
 
-  if (sortBy === 'rating') {
-    filtered.sort((a, b) => b.averageRating - a.averageRating);
-  } else if (sortBy === 'reviews') {
-    filtered.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
-  } else if (sortBy === 'alpha') {
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
-  }
+  sortBusinessesBySelection(filtered, sortBy);
 
   document.getElementById('empty-list').classList.toggle('hidden', filtered.length > 0);
 
@@ -724,13 +648,7 @@ function renderDealsView() {
   if (category !== 'all') {
     deals = deals.filter(b => b.category === category);
   }
-  if (sortBy === 'rating') {
-    deals.sort((a, b) => b.averageRating - a.averageRating);
-  } else if (sortBy === 'reviews') {
-    deals.sort((a, b) => (b.reviews?.length || 0) - (a.reviews?.length || 0));
-  } else if (sortBy === 'alpha') {
-    deals.sort((a, b) => a.name.localeCompare(b.name));
-  }
+  sortBusinessesBySelection(deals, sortBy);
 
   document.getElementById('empty-deals')?.classList.toggle('hidden', deals.length > 0);
 
@@ -838,6 +756,55 @@ function renderOwnerDashboard() {
     `;
     listEl.appendChild(card);
   });
+}
+
+function renderReportsView() {
+  // Render report metrics, category summary, and ranked lists.
+  const generatedEl = document.getElementById('report-generated-at');
+  if (!generatedEl) return;
+  const report = calculateReportData(businesses);
+
+  generatedEl.textContent = `Generated: ${report.generatedAt.toLocaleString()}`;
+  document.getElementById('report-total-businesses').textContent = report.totalBusinesses;
+  document.getElementById('report-active-businesses').textContent = report.totalActiveBusinesses;
+  document.getElementById('report-total-reviews').textContent = report.totalReviews;
+  document.getElementById('report-average-rating').textContent = report.avgRating;
+  document.getElementById('report-active-deals').textContent = report.activeDeals;
+
+  const categoryBody = document.getElementById('report-category-body');
+  if (categoryBody) {
+    categoryBody.innerHTML = report.categoryRows.length
+      ? report.categoryRows.map((row) => `
+        <tr>
+          <td>${row.category}</td>
+          <td>${row.businessCount}</td>
+          <td>${row.reviewCount}</td>
+          <td>${row.avgRating}</td>
+          <td>${row.activeDeals}</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="5" class="muted">No data yet.</td></tr>';
+  }
+
+  const topRatedEl = document.getElementById('report-top-rated');
+  if (topRatedEl) topRatedEl.innerHTML = renderReportList(report.topRated);
+  const mostReviewedEl = document.getElementById('report-most-reviewed');
+  if (mostReviewedEl) mostReviewedEl.innerHTML = renderReportList(report.mostReviewed);
+}
+
+function exportReportCsv() {
+  // Download the current report data as a CSV file.
+  const csv = buildReportCsv(businesses);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `venice-local-report-${stamp}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 // -----------------------------
@@ -981,7 +948,7 @@ function openDetail(businessId) {
   const body = document.getElementById('detail-body');
   const photos = biz.photos || [];
   const primaryPhoto = photos[0] || BUSINESS_PHOTO_PLACEHOLDER;
-  const { embed: mapUrl, link: mapLink } = buildMapUrls(biz);
+  const { embed: mapUrl, link: mapLink } = buildMapUrls(biz, MAPS_API_KEY);
   const offline = typeof navigator !== 'undefined' && navigator?.onLine === false;
   const reviewCount = biz.reviews?.length || 0;
   const reviewsHTML = biz.reviews && biz.reviews.length
@@ -1097,6 +1064,7 @@ function closeDetail() {
 
 async function submitReview(form) {
   // Validate and submit a new review, handling optional photo uploads.
+  // Guard so double-clicking submit does not post duplicate reviews.
   if (form.dataset.submitting === 'true') return;
   const bizId = form.getAttribute('data-review');
   const ratingInput = form.querySelector('input[name^="rating-"]:checked');
@@ -1127,6 +1095,7 @@ async function submitReview(form) {
     return;
   }
   if (photoUrlText && /[\n,]/.test(photoUrlText)) {
+    // Some people paste multiple links by accident; we only allow one image.
     errorEl.textContent = 'One image per review only.';
     return;
   }
@@ -1162,7 +1131,7 @@ async function submitReview(form) {
       newReview.photo = reviewPhoto;
     }
 
-    // Insert into reviews table, with fallback for schemas that don't include the photos array column.
+    // Try new schema first (photos[]). If that column doesn't exist, fallback to legacy schema.
     const reviewPayload = {
       business_id: bizId,
       user_id: newReview.userId,
@@ -1241,6 +1210,7 @@ async function submitBusiness(event) {
   // Add a new business or update an existing one owned by the user.
   event.preventDefault();
   const form = event.target;
+  // Same anti-double-submit idea as reviews.
   if (form.dataset.submitting === 'true') return;
 
   if (!currentUser || currentUser.role === 'guest') {
@@ -1255,6 +1225,7 @@ async function submitBusiness(event) {
   const hasDeals = document.getElementById('has-deals').checked;
   const dealsArray = [];
   if (hasDeals && window.__dealForm) {
+    // Build deals from the little dynamic rows in the form.
     const { dealFields } = window.__dealForm;
     Array.from(dealFields.children).forEach((row) => {
       const title = row.querySelector('.deal-title')?.value.trim() || '';
@@ -1513,6 +1484,7 @@ function bindBusinessFilterEvents() {
   const limitNote = document.getElementById('deal-limit-note');
 
   function updateDealsVisibility() {
+    // Hide whole coupon editor unless checkbox is on.
     dealsEditor.classList.toggle('hidden', !hasDeals.checked);
     if (!hasDeals.checked) {
       dealFields.innerHTML = '';
@@ -1532,6 +1504,7 @@ function bindBusinessFilterEvents() {
   });
 
   function updateDealLimitNote() {
+    // Quick feedback so user knows why add button is disabled.
     const count = dealFields.children.length;
     const remaining = MAX_COUPONS - count;
     limitNote.textContent = remaining <= 0
@@ -1574,7 +1547,7 @@ function bindBusinessFilterEvents() {
     updateDealLimitNote();
   }
 
-  // Expose helpers to other functions in this module scope.
+  // We stash these on window so edit mode can rebuild this same UI later.
   window.__dealForm = { addDealField, updateDealLimitNote, dealFields, hasDeals, updateDealsVisibility };
   updateDealsVisibility();
   updateDealLimitNote();
@@ -1633,6 +1606,11 @@ function bindDealsFilterEvents() {
   if (dealsSearch) dealsSearch.addEventListener('input', renderDealsView);
 }
 
+function bindReportEvents() {
+  const exportBtn = document.getElementById('export-report-csv');
+  if (exportBtn) exportBtn.addEventListener('click', exportReportCsv);
+}
+
 function bindModalEvents() {
   // Handle detail modal close, reviews, and gallery actions.
   document.getElementById('detail-modal').addEventListener('click', (e) => {
@@ -1671,6 +1649,7 @@ function bindEvents() {
   bindBusinessFilterEvents();
   bindListEvents();
   bindDealsFilterEvents();
+  bindReportEvents();
   bindModalEvents();
 
   document.getElementById('add-business-form').addEventListener('submit', submitBusiness);
@@ -1684,6 +1663,7 @@ async function initSession() {
   const { data } = await supabase.auth.getSession();
   const session = data?.session;
   if (session?.user) {
+    // If auth session exists, hydrate profile and jump straight into app view.
     const profile = await fetchProfile(session.user.id);
     currentUser = {
       id: session.user.id,

@@ -32,23 +32,58 @@ Local business owners can add their businesses to the app, and community members
 ```
 Venice-Local/
 - assets/                 # images and static assets
-- dist/                   # packaged builds (created by npm run dist)
 - index.html              # main app HTML
-- main.js                 # Electron main process
 - renderer.js             # renderer process logic
-- preload.js              # context bridge configuration
+- modules/                # split helpers (deals, reports, UI utils)
 - supabaseClient.js       # Supabase client setup
 - styles.css              # global styles
-- service-worker.js       # PWA/offline support
-- manifest.json           # app metadata
-- package.json            # scripts and dependencies
-- package-lock.json       # lockfile
+- service-worker.js       # service worker cleanup support
+- json files/manifest.json
+- json files/package.json
+- json files/package-lock.json
 ```
 
 ---
 
 ## Directions to Use
 To use Venice Local, launch the application and browse through local businesses listed in Venice, FL. Users can explore businesses by category, view details, leave reviews, and bookmark their favorite businesses for easy access later. Business owners can also submit their own businesses to be featured in the app.
+
+---
+
+## Accessibility
+- Semantic structure uses labeled form controls, heading hierarchy, and descriptive button text for screen reader clarity.
+- Keyboard navigation is supported across auth forms, filters, cards, modal close controls, and profile/settings actions.
+- Focus visibility is preserved through native controls and button styles so users can track current position.
+- Images include alt text and fallback behavior (avatars/business photos) to reduce broken-context scenarios.
+- Color choices keep high contrast for primary text and call-to-action elements against light card backgrounds.
+
+---
+
+## Testing Checklist (Manual QA)
+- Authentication:
+  - Sign up as customer and owner with valid inputs.
+  - Verify bot check blocks submit when incomplete.
+  - Sign in/out restores correct screen state.
+- Business browsing:
+  - Search by name/keyword.
+  - Filter by each category.
+  - Sort by rating, most reviewed, alphabetical.
+- Details and reviews:
+  - Open detail modal from list/favorites/deals.
+  - Submit review with rating/comment and optional photo.
+  - Confirm average rating and review count update after refresh.
+- Favorites:
+  - Save and unsave businesses.
+  - Verify favorites list reflects changes.
+- Deals:
+  - Add/edit active and inactive deals as owner.
+  - Confirm Local Deals view only shows active deals.
+- Owner dashboard:
+  - Add business, edit business, toggle active/inactive.
+  - Verify dashboard stats (businesses, reviews, avg rating, active deals).
+- Reports:
+  - Open Reports section and verify summary values populate.
+  - Export CSV and confirm file includes summary, categories, and top-5 sections.
 
 ---
 

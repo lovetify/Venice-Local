@@ -110,6 +110,7 @@
           <!-- Nav buttons switch visible section via data-target -->
           <button class="nav-btn" data-target="list">All Businesses</button>
           <button class="nav-btn" data-target="deals">Local Deals</button>
+          <button class="nav-btn" data-target="reports">Reports</button>
           <button class="nav-btn" data-target="favorites">My Favorites</button>
           <button class="nav-btn owner-only" data-target="owner">Owner Dashboard</button>
           <button class="nav-btn owner-only" data-target="add">Add My Business</button>
@@ -191,6 +192,68 @@
         </div>
         <div id="deals-list" class="card-grid"></div>
         <p id="empty-deals" class="empty-text hidden">No deals are live right now.</p>
+      </section>
+
+      <!-- Reports and analytics -->
+      <section id="reports-section" class="view-section hidden">
+        <div class="section-header">
+          <h2>Reports</h2>
+        </div>
+        <div class="card reports-toolbar">
+          <p class="muted small" id="report-generated-at">Generated: --</p>
+          <button type="button" class="secondary-btn" id="export-report-csv">Export CSV</button>
+        </div>
+        <div class="dashboard-grid" id="reports-summary-grid">
+          <div class="card stat-card">
+            <p class="muted">Total Businesses</p>
+            <h3 id="report-total-businesses">0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Active Businesses</p>
+            <h3 id="report-active-businesses">0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Total Reviews</p>
+            <h3 id="report-total-reviews">0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Avg Rating</p>
+            <h3 id="report-average-rating">0.0</h3>
+          </div>
+          <div class="card stat-card">
+            <p class="muted">Active Deals</p>
+            <h3 id="report-active-deals">0</h3>
+          </div>
+        </div>
+        <div class="card report-card">
+          <h3>Category Breakdown</h3>
+          <div class="report-table-wrap">
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Businesses</th>
+                  <th>Reviews</th>
+                  <th>Avg Rating</th>
+                  <th>Active Deals</th>
+                </tr>
+              </thead>
+              <tbody id="report-category-body">
+                <tr><td colspan="5" class="muted">No data yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-grid">
+          <div class="card report-card">
+            <h3>Top 5 Highest Rated</h3>
+            <ol id="report-top-rated" class="report-list"></ol>
+          </div>
+          <div class="card report-card">
+            <h3>Top 5 Most Reviewed</h3>
+            <ol id="report-most-reviewed" class="report-list"></ol>
+          </div>
+        </div>
       </section>
 
       <!-- Saved favorites -->
