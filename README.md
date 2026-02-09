@@ -147,7 +147,7 @@ The Reports section includes:
 - Category breakdown table
 - Top 5 highest rated businesses
 - Top 5 most reviewed businesses
-- CSV export for judge-friendly report output
+- CSV export for report output
 
 ---
 
