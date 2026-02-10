@@ -73,7 +73,7 @@ We selected **HTML, CSS, and JavaScript (ES Modules)** as our primary implementa
 - **CSS** was chosen for presentation and responsive layout so we could separate styling concerns from application logic and maintain a consistent UI system.
 - **JavaScript (ES Modules)** was chosen for client-side application logic because it supports modular architecture (`modules/`), event-driven UI updates, and direct integration with REST-style backend services (Supabase APIs).
 - We intentionally used a **frontend-first architecture** (no custom server runtime) to reduce hosting complexity, improve portability across devices, and simplify local execution for judging and demonstration.
-- **Backend (Supabase/PostgreSQL)** was chosen as a managed **Backend-as-a-Service (BaaS)** to provide **authentication**, **relational data storage**, and **file storage** through **REST-style APIs**, reducing custom server infrastructure while improving **scalability**, **security**, and **deployment reliability**.
+- **Backend (Supabase/PostgreSQL)** was chosen as a managed **Backend-as-a-Service (BaaS)** to provide authentication, relational data storage, and file storage through REST-style APIs, reducing custom server infrastructure while improving scalability, security, and deployment reliability.
 - This stack aligns with current industry practice for lightweight web applications: **standards-compliant markup**, **componentized styling**, and **modular scripting** with external managed backend services.
 
 ---
