@@ -157,7 +157,7 @@ h1, h2, h3 {
   width: clamp(120px, 16vw, 240px);
   height: clamp(320px, 62vh, 620px);
   background: url('assets/Palm_Trees_Silhouette_PNG_Clip_Art_Image.png') bottom center / contain no-repeat;
-  opacity: 0.2;
+  opacity: 0.12;
   pointer-events: none;
   z-index: 0;
   transform-origin: bottom center;
@@ -198,7 +198,7 @@ h1, h2, h3 {
   width: clamp(180px, 22vw, 320px);
   aspect-ratio: 1 / 1;
   background: url('assets/sun.webp') center / contain no-repeat;
-  opacity: 0.16;
+  opacity: 0.1;
   filter: drop-shadow(0 8px 20px rgba(255, 175, 60, 0.25));
   animation: sunFloat 8.6s ease-in-out infinite;
   transition: opacity 240ms ease;
@@ -211,7 +211,7 @@ h1, h2, h3 {
 
 #app-screen .bird {
   --bird-scale: 1;
-  --bird-opacity: 0.2;
+  --bird-opacity: 0.14;
   position: absolute;
   left: 16vw;
   top: 120px;
@@ -228,7 +228,7 @@ h1, h2, h3 {
   left: clamp(18px, 3.5vw, 56px);
   top: clamp(200px, 28vh, 300px);
   --bird-scale: 0.72;
-  --bird-opacity: 0.18;
+  --bird-opacity: 0.12;
   animation-delay: -0.6s;
 }
 
@@ -236,7 +236,7 @@ h1, h2, h3 {
   left: clamp(42px, 6.5vw, 92px);
   top: clamp(310px, 44vh, 440px);
   --bird-scale: 0.86;
-  --bird-opacity: 0.14;
+  --bird-opacity: 0.1;
   animation-delay: -1.8s;
   animation-duration: 5.1s;
 }
@@ -246,7 +246,7 @@ h1, h2, h3 {
   right: clamp(18px, 3.5vw, 56px);
   top: clamp(236px, 34vh, 360px);
   --bird-scale: 0.64;
-  --bird-opacity: 0.12;
+  --bird-opacity: 0.08;
   animation-delay: -2.7s;
   animation-duration: 5.7s;
 }
@@ -1261,7 +1261,7 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   }
   #app-screen::before,
   #app-screen::after {
-    opacity: 0.1;
+    opacity: 0.06;
     width: clamp(90px, 14vw, 140px);
   }
   #app-screen .sky-sun {

@@ -338,7 +338,8 @@ function applyStaticAssets() {
   document.documentElement.style.setProperty('--auth-bg-image', `url('${BACKGROUND_IMAGE}')`);
 }
 
-// Cloudflare Turnstile callbacks
+// Cloudflare Turnstile callbacks.
+// Basically: when Cloudflare says "human confirmed", we stash that token.
 window.onTurnstileSuccess = (token) => {
   const input = document.getElementById('turnstile-token');
   if (input) input.value = token;
@@ -357,10 +358,10 @@ window.onTurnstileSigninExpired = () => {
 };
 
 function getTurnstileToken(formId) {
-  // Grab the Cloudflare Turnstile token from the widget-generated hidden input,
-  // with a fallback to our manual hidden field. Some browsers/ports render the
-  // widget fine (green check) but never fire the callback that fills our field,
-  // which led to the "Please complete the bot check" blocker.
+  // We check two spots because browsers can be weird:
+  // 1) the widget's hidden field
+  // 2) our own backup hidden input
+  // This avoids the "I clicked the check but it still says no" pain.
   const form = document.getElementById(formId);
   const widgetField = form?.querySelector('input[name="cf-turnstile-response"]');
   if (widgetField?.value) return widgetField.value;
@@ -371,7 +372,8 @@ function getTurnstileToken(formId) {
 }
 
 function setView(target) {
-  // Toggle between main app sections and optionally refresh owner data.
+  // View switcher for the whole app.
+  // Think of this like changing tabs and doing quick refreshes when needed.
   const sections = document.querySelectorAll('.view-section');
   sections.forEach(section => {
     section.classList.add('hidden');
@@ -381,7 +383,7 @@ function setView(target) {
   if (selected) {
     selected.classList.remove('hidden');
     selected.classList.add('animate-in');
-    // Tiny animation timeout so sections don't keep animating forever.
+    // Remove animation class after it runs so it doesn't keep replaying forever.
     setTimeout(() => selected.classList.remove('animate-in'), 350);
     const appScreen = document.getElementById('app-screen');
     if (appScreen) {
@@ -396,6 +398,8 @@ function setView(target) {
 }
 
 async function transitionMainScreens(showApp) {
+  // Smooth fade between auth and main app.
+  // Not required for logic, just makes the UI feel less jumpy.
   const authScreen = document.getElementById('auth-screen');
   const appScreen = document.getElementById('app-screen');
   if (!authScreen || !appScreen) return;
@@ -576,8 +580,41 @@ function sortBusinessesBySelection(items, sortBy) {
   }
 }
 
+function getPrimaryBusinessPhoto(biz) {
+  // Grab the first gallery pic if we have one, otherwise fallback image and move on.
+  return biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
+}
+
+function getActiveDeals(biz) {
+  // This app stores deals as JSON-ish text, so parse once when we need it.
+  return parseDeals(biz.specialDeals).filter((deal) => deal.active);
+}
+
+function buildBusinessCardMarkup({ biz, footerHtml = '', extraBody = '', dealBadge = false }) {
+  // Shared card shell for list/favorites/deals so we don't repeat giant HTML blocks everywhere.
+  const photo = getPrimaryBusinessPhoto(biz);
+  return `
+    <div class="business-photo">
+      <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
+    </div>
+    <div class="card-header">
+      <div>
+        <h3>${biz.name}</h3>
+        <p class="muted">${biz.category} • ${biz.address}</p>
+      </div>
+      ${renderRatingChip(biz)}
+    </div>
+    <p class="description">${biz.shortDescription}</p>
+    ${extraBody}
+    <div class="card-footer">
+      ${dealBadge ? '<span class="deal-pill">Deals available</span>' : '<span></span>'}
+      <div>${footerHtml}</div>
+    </div>
+  `;
+}
+
 function renderBusinesses() {
-  // Render the main business list with filters and sorting.
+  // Main feed render: filter + sort + paint cards.
   const listEl = document.getElementById('business-list');
   listEl.innerHTML = '';
 
@@ -587,6 +624,7 @@ function renderBusinesses() {
 
   let filtered = businesses.filter(biz => {
     if (biz.isActive === false) return false;
+    // Keep search simple: name + short blurb covers most use cases.
     const matchesSearch = biz.name.toLowerCase().includes(searchTerm) || biz.shortDescription.toLowerCase().includes(searchTerm);
     const matchesCategory = category === 'all' || biz.category === category;
     return matchesSearch && matchesCategory;
@@ -600,27 +638,12 @@ function renderBusinesses() {
     const card = document.createElement('div');
     card.className = 'card business-card';
     card.dataset.detail = biz.id;
-    const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
-    const hasDeal = parseDeals(biz.specialDeals).some((d) => d.active);
-    card.innerHTML = `
-      <div class="business-photo">
-        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
-      </div>
-      <div class="card-header">
-        <div>
-          <h3>${biz.name}</h3>
-          <p class="muted">${biz.category} • ${biz.address}</p>
-        </div>
-        ${renderRatingChip(biz)}
-      </div>
-      <p class="description">${biz.shortDescription}</p>
-      <div class="card-footer">
-        ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
-        <div>
-          ${renderFavoriteButton(biz.id)}
-        </div>
-      </div>
-    `;
+    const hasDeal = getActiveDeals(biz).length > 0;
+    card.innerHTML = buildBusinessCardMarkup({
+      biz,
+      footerHtml: renderFavoriteButton(biz.id),
+      dealBadge: hasDeal
+    });
     listEl.appendChild(card);
   });
 
@@ -637,7 +660,7 @@ function renderFavoriteButton(businessId) {
 }
 
 function renderFavoritesView() {
-  // Populate the favorites grid based on saved IDs.
+  // Favorites tab render: same cards, only pre-saved businesses.
   const favSection = document.getElementById('favorites-list');
   favSection.innerHTML = '';
   const favoriteIds = favorites[currentUser?.id] || [];
@@ -648,33 +671,18 @@ function renderFavoritesView() {
     const card = document.createElement('div');
     card.className = 'card business-card';
     card.dataset.detail = biz.id;
-    const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
-    const hasDeal = parseDeals(biz.specialDeals).some((d) => d.active);
-    card.innerHTML = `
-      <div class="business-photo">
-        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
-      </div>
-      <div class="card-header">
-        <div>
-          <h3>${biz.name}</h3>
-          <p class="muted">${biz.category} • ${biz.address}</p>
-        </div>
-        ${renderRatingChip(biz)}
-      </div>
-      <p class="description">${biz.shortDescription}</p>
-      <div class="card-footer">
-        ${hasDeal ? `<span class="deal-pill">Deals available</span>` : '<span></span>'}
-        <div>
-          <button class="secondary-btn fav-btn saved" data-fav="${biz.id}">♥ Saved</button>
-        </div>
-      </div>
-    `;
+    const hasDeal = getActiveDeals(biz).length > 0;
+    card.innerHTML = buildBusinessCardMarkup({
+      biz,
+      footerHtml: `<button class="secondary-btn fav-btn saved" data-fav="${biz.id}">♥ Saved</button>`,
+      dealBadge: hasDeal
+    });
     favSection.appendChild(card);
   });
 }
 
 function renderDealsView() {
-  // Show only businesses with an active specialDeals value.
+  // Deals tab render: only show businesses with at least one live coupon.
   const dealsSection = document.getElementById('deals-list');
   if (!dealsSection) return;
   dealsSection.innerHTML = '';
@@ -682,30 +690,33 @@ function renderDealsView() {
   const category = document.getElementById('deals-category-filter')?.value || 'all';
   const sortBy = document.getElementById('deals-sort-select')?.value || 'rating';
 
-  let deals = businesses.filter(b => {
-    const activeDeals = parseDeals(b.specialDeals).filter((d) => d.active);
-    return b.isActive !== false && activeDeals.length;
-  });
+  // Parse deals one time per business so we don't keep re-parsing the same text.
+  let deals = businesses
+    .filter((b) => b.isActive !== false)
+    .map((b) => ({ biz: b, activeDeals: getActiveDeals(b) }))
+    .filter((entry) => entry.activeDeals.length > 0);
+
   if (searchTerm) {
-    deals = deals.filter((b) => {
-      const dealText = parseDeals(b.specialDeals).map((d) => d.title).join(' ');
-      const searchableText = `${b.name} ${b.shortDescription} ${b.address} ${dealText}`.toLowerCase();
+    deals = deals.filter(({ biz, activeDeals }) => {
+      const dealText = activeDeals.map((d) => d.title).join(' ');
+      const searchableText = `${biz.name} ${biz.shortDescription} ${biz.address} ${dealText}`.toLowerCase();
       return searchableText.includes(searchTerm);
     });
   }
   if (category !== 'all') {
-    deals = deals.filter(b => b.category === category);
+    deals = deals.filter(({ biz }) => biz.category === category);
   }
-  sortBusinessesBySelection(deals, sortBy);
+  const activeDealsByBusinessId = new Map(deals.map(({ biz, activeDeals }) => [biz.id, activeDeals]));
+  const dealBusinesses = deals.map(({ biz }) => biz);
+  sortBusinessesBySelection(dealBusinesses, sortBy);
 
-  document.getElementById('empty-deals')?.classList.toggle('hidden', deals.length > 0);
+  document.getElementById('empty-deals')?.classList.toggle('hidden', dealBusinesses.length > 0);
 
-  deals.forEach(biz => {
+  dealBusinesses.forEach((biz) => {
     const card = document.createElement('div');
     card.className = 'card business-card';
     card.dataset.detail = biz.id;
-    const photo = biz.photos?.[0] || BUSINESS_PHOTO_PLACEHOLDER;
-    const activeDeals = parseDeals(biz.specialDeals).filter((d) => d.active);
+    const activeDeals = activeDealsByBusinessId.get(biz.id) || [];
     const coupons = activeDeals.map((d) => `
       <div class="coupon">
         <div class="coupon-body">
@@ -714,25 +725,11 @@ function renderDealsView() {
         </div>
       </div>
     `).join('');
-    card.innerHTML = `
-      <div class="business-photo">
-        <img src="${photo}" alt="${biz.name} photo" onerror="this.onerror=null;this.src='${BUSINESS_PHOTO_PLACEHOLDER}'">
-      </div>
-      <div class="card-header">
-        <div>
-          <h3>${biz.name}</h3>
-          <p class="muted">${biz.category} • ${biz.address}</p>
-        </div>
-        ${renderRatingChip(biz)}
-      </div>
-      <p class="description">${biz.shortDescription}</p>
-      <div class="coupon-stack">${coupons}</div>
-      <div class="card-footer">
-        <div>
-          ${renderFavoriteButton(biz.id)}
-        </div>
-      </div>
-    `;
+    card.innerHTML = buildBusinessCardMarkup({
+      biz,
+      footerHtml: renderFavoriteButton(biz.id),
+      extraBody: `<div class="coupon-stack">${coupons}</div>`
+    });
     dealsSection.appendChild(card);
   });
 }
@@ -859,7 +856,7 @@ function exportReportCsv() {
 // Authentication
 // -----------------------------
 function showAuthCard(mode = 'choice') {
-  // Swap between signup, signin, and choice cards.
+  // Auth mini-router: choose which card is visible.
   const choice = document.getElementById('auth-choice-card');
   const signup = document.getElementById('signup-card');
   const signin = document.getElementById('signin-card');
@@ -872,7 +869,8 @@ function showAuthCard(mode = 'choice') {
 }
 
 async function signUp(event) {
-  // Create a new Supabase user and profile after basic human checks.
+  // New account flow.
+  // Grab form values, run quick checks, create auth user, then save profile row.
   event.preventDefault();
   const name = document.getElementById('signup-name').value.trim();
   const email = document.getElementById('signup-email').value.trim().toLowerCase();
@@ -885,6 +883,7 @@ async function signUp(event) {
   errorEl.textContent = '';
 
   if (!name || !email || !password || !role) {
+    // Quick guard so we don't send half-empty data to Supabase.
     errorEl.textContent = 'Please fill every field and choose a role.';
     return;
   }
@@ -893,7 +892,7 @@ async function signUp(event) {
     return;
   }
   try {
-    // If a session somehow still exists, clear it before creating another account.
+    // If someone is still logged in somehow, clear that first so this signup is clean.
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData?.session) {
       await supabase.auth.signOut();
@@ -924,7 +923,8 @@ async function signUp(event) {
 }
 
 async function signIn(event) {
-  // Sign an existing user in and hydrate profile details.
+  // Login flow for existing users.
+  // Sign in, load profile extras, and enter app.
   event.preventDefault();
   const email = document.getElementById('signin-email').value.trim().toLowerCase();
   const password = document.getElementById('signin-password').value.trim();
@@ -956,13 +956,13 @@ async function signIn(event) {
 }
 
 function continueAsGuest() {
-  // Let users browse without creating an account.
+  // Guest mode = view stuff without account features like reviews/favorites.
   currentUser = { id: 'guest', name: 'Guest', email: 'guest', role: 'guest', avatar: DEFAULT_AVATAR };
   enterApp();
 }
 
 async function enterApp() {
-  // Transition from auth screen into the main app shell.
+  // "We're in" sequence: show app, refresh UI, sync data.
   await transitionMainScreens(true);
   updateRoleVisibility();
   renderProfile();
@@ -972,7 +972,8 @@ async function enterApp() {
 }
 
 async function logout() {
-  // Clear session info and return to the auth screen.
+  // Full reset back to auth screen.
+  // We clear forms/errors too so the next login starts fresh.
   currentUser = null;
   try {
     await supabase.auth.signOut();
@@ -999,7 +1000,7 @@ async function logout() {
 // Business detail modal & reviews
 // -----------------------------
 function openDetail(businessId) {
-  // Populate and show the business detail modal.
+  // Build detail modal content for one business card click.
   const biz = businesses.find(b => b.id === businessId);
   if (!biz) return;
   const canManageInactive = currentUser && currentUser.role === 'owner' && biz.ownerUserId === currentUser.id;
@@ -1011,6 +1012,7 @@ function openDetail(businessId) {
   const { embed: mapUrl, link: mapLink } = buildMapUrls(biz, MAPS_API_KEY);
   const offline = typeof navigator !== 'undefined' && navigator?.onLine === false;
   const reviewCount = biz.reviews?.length || 0;
+  // Render reviews block; fallback message if no reviews yet.
   const reviewsHTML = biz.reviews && biz.reviews.length
     ? biz.reviews.map(r => {
         const avatar = r.avatar || DEFAULT_AVATAR || buildAvatarPlaceholder(r.userName || 'User');
@@ -1732,7 +1734,7 @@ function bindModalEvents() {
 }
 
 function bindEvents() {
-  // Connect UI controls to their handlers once the DOM is ready.
+  // Central event hookup so we keep setup in one spot.
   bindAuthEvents();
   bindNavigationEvents();
   bindBusinessFilterEvents();
@@ -1748,12 +1750,12 @@ function bindEvents() {
 // Initialization
 // -----------------------------
 async function initSession() {
-  // Restore an existing Supabase session if available.
+  // On page load, check if user already has a valid session.
   try {
     const { data } = await supabase.auth.getSession();
     const session = data?.session;
     if (session?.user) {
-      // If auth session exists, hydrate profile and jump straight into app view.
+      // User already logged in before: rebuild their local user object fast.
       const profile = await fetchProfile(session.user.id);
       currentUser = {
         id: session.user.id,
@@ -1778,7 +1780,8 @@ async function initSession() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Kick off event wiring, assets, and a fresh data sync.
+  // App boot sequence.
+  // Wire events, paint static assets, then sync session/data.
   showLoadingOverlay();
   bindEvents();
   showAuthCard('choice');
@@ -1788,7 +1791,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupLightbox();
   initSession();
 
-  // Disable SW caching; just clean up any old workers/caches so Supabase calls are always live in npm start, dmg, and zip.
+  // We intentionally clear old SW + caches here to avoid stale local data in demos.
   const CACHE_PREFIX = 'venice-local-cache';
   const cleanCachesAndWorkers = async () => {
     try {
@@ -1809,6 +1812,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupHelpToggle() {
+  // Tiny helper panel open/close logic.
   const openBtn = document.getElementById('help-btn');
   const panel = document.getElementById('help-panel');
   const closeBtn = document.getElementById('help-close');
@@ -1823,7 +1827,7 @@ function setupHelpToggle() {
 }
 
 function setupOnboardingStrip() {
-  // Show quick tips one time, then remember dismissal.
+  // Show quick tips once, then remember dismissal in localStorage.
   const strip = document.getElementById('onboarding-strip');
   const closeBtn = document.getElementById('onboarding-close');
   if (!strip || !closeBtn) return;
@@ -1856,10 +1860,11 @@ function setupOnboardingStrip() {
   });
 }
 
-// Lightbox for fullscreen viewing of gallery photos
+// Lightbox state for fullscreen photo viewer.
 let lightboxPhotos = [];
 let lightboxIndex = 0;
 function setupLightbox() {
+  // Gallery popup controls (open, close, prev, next, keyboard arrows).
   const lightbox = document.getElementById('photo-lightbox');
   const img = document.getElementById('lightbox-image');
   const closeBtn = document.getElementById('close-lightbox');
@@ -1868,12 +1873,14 @@ function setupLightbox() {
   if (!lightbox || !img || !closeBtn || !prevBtn || !nextBtn) return;
 
   const render = () => {
+    // Wrap index so left/right keeps cycling instead of crashing at ends.
     if (!lightboxPhotos.length) return;
     lightboxIndex = ((lightboxIndex % lightboxPhotos.length) + lightboxPhotos.length) % lightboxPhotos.length;
     img.src = lightboxPhotos[lightboxIndex];
   };
 
   window.openPhotoLightbox = (photos, start = 0) => {
+    // Exposed globally so card/detail click handlers can launch it.
     if (!photos || !photos.length) return;
     lightboxPhotos = photos;
     lightboxIndex = start;
