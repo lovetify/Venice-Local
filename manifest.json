@@ -1,0 +1,15 @@
+{
+  "name": "Venice Local",
+  "short_name": "VeniceLocal",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f0e6",
+  "theme_color": "#175f62",
+  "icons": [
+    {
+      "src": "./assets/venice-local.png",
+      "sizes": "500x500",
+      "type": "image/png"
+    }
+  ]
+}
