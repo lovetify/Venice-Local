@@ -164,14 +164,6 @@ The Reports section includes:
 
 ---
 
-## Accessibility Notes
-- Labeled form controls and readable heading structure
-- Keyboard-friendly interactions for main workflows
-- Alt text and fallback images for avatars/business photos
-- Visible feedback states for errors and success messaging
-
----
-
 ## Validation and Reliability
 - Required fields enforced for business creation and reviews
 - Review constraints (single photo source, valid rating range)

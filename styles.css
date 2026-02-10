@@ -157,7 +157,7 @@ h1, h2, h3 {
   width: clamp(120px, 16vw, 240px);
   height: clamp(320px, 62vh, 620px);
   background: url('assets/Palm_Trees_Silhouette_PNG_Clip_Art_Image.png') bottom center / contain no-repeat;
-  opacity: 0.12;
+  opacity: 0.04;
   pointer-events: none;
   z-index: 0;
   transform-origin: bottom center;
@@ -169,12 +169,12 @@ h1, h2, h3 {
 }
 #app-screen::before {
   left: 10px;
-  animation: palmSwayLeft 6.8s ease-in-out infinite;
+  animation: palmSwayLeft 16s ease-in-out infinite;
 }
 #app-screen::after {
   right: 10px;
   transform: scaleX(-1);
-  animation: palmSwayRight 7.2s ease-in-out infinite;
+  animation: palmSwayRight 18s ease-in-out infinite;
 }
 #app-screen .topbar,
 #app-screen .content {
@@ -198,9 +198,9 @@ h1, h2, h3 {
   width: clamp(180px, 22vw, 320px);
   aspect-ratio: 1 / 1;
   background: url('assets/sun.webp') center / contain no-repeat;
-  opacity: 0.1;
+  opacity: 0.03;
   filter: drop-shadow(0 8px 20px rgba(255, 175, 60, 0.25));
-  animation: sunFloat 8.6s ease-in-out infinite;
+  animation: sunFloat 20s ease-in-out infinite;
   transition: opacity 240ms ease;
 }
 
@@ -211,7 +211,7 @@ h1, h2, h3 {
 
 #app-screen .bird {
   --bird-scale: 1;
-  --bird-opacity: 0.14;
+  --bird-opacity: 0.05;
   position: absolute;
   left: 16vw;
   top: 120px;
@@ -219,7 +219,7 @@ h1, h2, h3 {
   aspect-ratio: 1 / 1;
   background: url('assets/bird.png') center / contain no-repeat;
   opacity: var(--bird-opacity);
-  animation: birdSway 4.6s ease-in-out infinite;
+  animation: birdSway 12s ease-in-out infinite;
   transform-origin: center;
   transition: opacity 240ms ease;
 }
@@ -228,7 +228,7 @@ h1, h2, h3 {
   left: clamp(18px, 3.5vw, 56px);
   top: clamp(200px, 28vh, 300px);
   --bird-scale: 0.72;
-  --bird-opacity: 0.12;
+  --bird-opacity: 0.04;
   animation-delay: -0.6s;
 }
 
@@ -236,9 +236,9 @@ h1, h2, h3 {
   left: clamp(42px, 6.5vw, 92px);
   top: clamp(310px, 44vh, 440px);
   --bird-scale: 0.86;
-  --bird-opacity: 0.1;
+  --bird-opacity: 0.03;
   animation-delay: -1.8s;
-  animation-duration: 5.1s;
+  animation-duration: 13.5s;
 }
 
 #app-screen .bird-c {
@@ -246,9 +246,9 @@ h1, h2, h3 {
   right: clamp(18px, 3.5vw, 56px);
   top: clamp(236px, 34vh, 360px);
   --bird-scale: 0.64;
-  --bird-opacity: 0.08;
+  --bird-opacity: 0.025;
   animation-delay: -2.7s;
-  animation-duration: 5.7s;
+  animation-duration: 15s;
 }
 
 #app-screen.palms-muted .sky-sun,
