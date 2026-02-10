@@ -17,11 +17,17 @@
 
 /* Base resets and typography */
 * { box-sizing: border-box; }
+html,
+body {
+  background: var(--accent-light);
+  overscroll-behavior-y: none;
+}
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .sr-only {
@@ -44,6 +50,8 @@ h1, h2, h3 {
 .screen { min-height: 100vh; }
 .hidden { display: none !important; }
 .animate-in { animation: fadeSlideUp 320ms ease; }
+.screen-fade-in { animation: screenFadeIn 220ms ease both; }
+.screen-fade-out { animation: screenFadeOut 170ms ease both; }
 
 /* First-load overlay to keep things themed while data initializes */
 .loading-overlay {
@@ -108,6 +116,16 @@ h1, h2, h3 {
   50% { opacity: 1; transform: translateY(-3px); }
 }
 
+@keyframes screenFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes screenFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 /* Hero/auth screen layout */
 #auth-screen {
   background:
@@ -121,6 +139,144 @@ h1, h2, h3 {
   justify-content: center;
   position: relative;
   padding: 32px 16px;
+}
+
+/* Tropical side silhouettes for wide app views */
+#app-screen {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(207, 222, 215, 0.72), rgba(207, 222, 215, 0.72));
+}
+#app-screen::before,
+#app-screen::after {
+  content: '';
+  position: fixed;
+  bottom: -8px;
+  width: clamp(120px, 16vw, 240px);
+  height: clamp(320px, 62vh, 620px);
+  background: url('assets/Palm_Trees_Silhouette_PNG_Clip_Art_Image.png') bottom center / contain no-repeat;
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: 0;
+  transform-origin: bottom center;
+  transition: opacity 260ms ease;
+}
+#app-screen.palms-muted::before,
+#app-screen.palms-muted::after {
+  opacity: 0;
+}
+#app-screen::before {
+  left: 10px;
+  animation: palmSwayLeft 6.8s ease-in-out infinite;
+}
+#app-screen::after {
+  right: 10px;
+  transform: scaleX(-1);
+  animation: palmSwayRight 7.2s ease-in-out infinite;
+}
+#app-screen .topbar,
+#app-screen .content {
+  position: relative;
+  z-index: 1;
+}
+
+#app-screen .sky-decor {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  clip-path: inset(0 0 0 0);
+}
+
+#app-screen .sky-sun {
+  position: absolute;
+  top: -52px;
+  left: -82px;
+  width: clamp(180px, 22vw, 320px);
+  aspect-ratio: 1 / 1;
+  background: url('assets/sun.webp') center / contain no-repeat;
+  opacity: 0.16;
+  filter: drop-shadow(0 8px 20px rgba(255, 175, 60, 0.25));
+  animation: sunFloat 8.6s ease-in-out infinite;
+  transition: opacity 240ms ease;
+}
+
+#app-screen .sky-birds {
+  position: absolute;
+  inset: 0;
+}
+
+#app-screen .bird {
+  --bird-scale: 1;
+  --bird-opacity: 0.2;
+  position: absolute;
+  left: 16vw;
+  top: 120px;
+  width: clamp(56px, 5vw, 96px);
+  aspect-ratio: 1 / 1;
+  background: url('assets/bird.png') center / contain no-repeat;
+  opacity: var(--bird-opacity);
+  animation: birdSway 4.6s ease-in-out infinite;
+  transform-origin: center;
+  transition: opacity 240ms ease;
+}
+
+#app-screen .bird-a {
+  left: clamp(18px, 3.5vw, 56px);
+  top: clamp(200px, 28vh, 300px);
+  --bird-scale: 0.72;
+  --bird-opacity: 0.18;
+  animation-delay: -0.6s;
+}
+
+#app-screen .bird-b {
+  left: clamp(42px, 6.5vw, 92px);
+  top: clamp(310px, 44vh, 440px);
+  --bird-scale: 0.86;
+  --bird-opacity: 0.14;
+  animation-delay: -1.8s;
+  animation-duration: 5.1s;
+}
+
+#app-screen .bird-c {
+  left: auto;
+  right: clamp(18px, 3.5vw, 56px);
+  top: clamp(236px, 34vh, 360px);
+  --bird-scale: 0.64;
+  --bird-opacity: 0.12;
+  animation-delay: -2.7s;
+  animation-duration: 5.7s;
+}
+
+#app-screen.palms-muted .sky-sun,
+#app-screen.palms-muted .bird {
+  opacity: 0;
+}
+
+@keyframes palmSwayLeft {
+  0%, 100% { transform: rotate(-1.8deg) translateY(0); }
+  50% { transform: rotate(1.4deg) translateY(-1px); }
+}
+@keyframes palmSwayRight {
+  0%, 100% { transform: scaleX(-1) rotate(1.8deg) translateY(0); }
+  50% { transform: scaleX(-1) rotate(-1.2deg) translateY(-1px); }
+}
+
+@keyframes sunFloat {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+  50% { transform: translateY(3px) rotate(1deg); }
+}
+
+@keyframes birdSway {
+  0%, 100% {
+    transform: translateY(0) rotate(-4deg) scale(var(--bird-scale));
+  }
+  50% {
+    transform: translateY(-5px) rotate(4deg) scale(var(--bird-scale));
+  }
 }
 
 /* Single centered auth box */
@@ -438,6 +594,27 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 
 /* Main content layout and business grid */
 .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.app-footer {
+  position: relative;
+  z-index: 1;
+  margin: 6px auto 24px;
+  width: min(1200px, calc(100% - 32px));
+  text-align: center;
+  color: rgba(16, 54, 60, 0.78);
+  font-size: 13px;
+  letter-spacing: 0.25px;
+}
+.app-footer p {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(245, 240, 230, 0.84);
+  border: 1px solid rgba(23, 95, 98, 0.14);
+  backdrop-filter: blur(2px);
+}
+#app-screen.footer-hidden .app-footer {
+  display: none;
+}
 .filters { margin-bottom: 16px; }
 .filter-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end; }
 .filters #role-note { margin-top: 10px; display: block; }
@@ -634,7 +811,11 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 @media (prefers-reduced-motion: reduce) {
   .business-card,
   .business-photo img,
-  .view-section.animate-in .business-card {
+  .view-section.animate-in .business-card,
+  #app-screen .sky-sun,
+  #app-screen .bird,
+  #app-screen::before,
+  #app-screen::after {
     transition: none;
     animation: none;
   }
@@ -1077,5 +1258,16 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   .business-card[data-detail]:hover {
     transform: none;
     box-shadow: 0 10px 22px rgba(23, 95, 98, 0.12);
+  }
+  #app-screen::before,
+  #app-screen::after {
+    opacity: 0.1;
+    width: clamp(90px, 14vw, 140px);
+  }
+  #app-screen .sky-sun {
+    width: clamp(150px, 28vw, 220px);
+  }
+  #app-screen .bird-c {
+    display: none;
   }
 }

@@ -383,11 +383,43 @@ function setView(target) {
     selected.classList.add('animate-in');
     // Tiny animation timeout so sections don't keep animating forever.
     setTimeout(() => selected.classList.remove('animate-in'), 350);
+    const appScreen = document.getElementById('app-screen');
+    if (appScreen) {
+      appScreen.classList.toggle('palms-muted', target === 'profile');
+      appScreen.classList.toggle('footer-hidden', target === 'profile' || target === 'favorites');
+    }
     if (target === 'owner') renderOwnerDashboard();
     if (target === 'favorites') renderFavoritesView();
     if (target === 'deals') renderDealsView();
     if (target === 'reports') renderReportsView();
   }
+}
+
+async function transitionMainScreens(showApp) {
+  const authScreen = document.getElementById('auth-screen');
+  const appScreen = document.getElementById('app-screen');
+  if (!authScreen || !appScreen) return;
+
+  const entering = showApp ? appScreen : authScreen;
+  const leaving = showApp ? authScreen : appScreen;
+  const leavingVisible = !leaving.classList.contains('hidden');
+
+  if (leavingVisible) {
+    leaving.classList.add('screen-fade-out');
+    await new Promise((resolve) => window.setTimeout(resolve, 170));
+    leaving.classList.remove('screen-fade-out');
+  }
+
+  if (showApp) {
+    authScreen.classList.add('hidden');
+    appScreen.classList.remove('hidden');
+  } else {
+    authScreen.classList.remove('hidden');
+    appScreen.classList.add('hidden');
+  }
+
+  entering.classList.add('screen-fade-in');
+  window.setTimeout(() => entering.classList.remove('screen-fade-in'), 240);
 }
 
 async function uploadImage(file, folder) {
@@ -929,10 +961,9 @@ function continueAsGuest() {
   enterApp();
 }
 
-function enterApp() {
+async function enterApp() {
   // Transition from auth screen into the main app shell.
-  document.getElementById('auth-screen').classList.add('hidden');
-  document.getElementById('app-screen').classList.remove('hidden');
+  await transitionMainScreens(true);
   updateRoleVisibility();
   renderProfile();
   checkBusinessPhotoSupport();
@@ -948,8 +979,7 @@ async function logout() {
   } catch (err) {
     console.warn('Sign out encountered an issue, continuing with local reset.', err?.message || err);
   }
-  document.getElementById('auth-screen').classList.remove('hidden');
-  document.getElementById('app-screen').classList.add('hidden');
+  await transitionMainScreens(false);
   document.getElementById('signin-form').reset();
   document.getElementById('signup-form').reset();
   const signupError = document.getElementById('signup-error');
