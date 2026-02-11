@@ -214,8 +214,8 @@ respective businesses and were sourced from publicly available images on Google
 for educational and demonstration purposes only.
 
 Sources include:
-• Google Search (public business listings)
-• Google Maps (public business listings)
+- Google Search (public business listings)
+- Google Maps (public business listings)
 
 No ownership is claimed over these images.
 
