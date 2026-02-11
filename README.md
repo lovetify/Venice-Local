@@ -36,7 +36,7 @@ Venice Local combines local business discovery, ratings/reviews, favorites, owne
 - **Deal format compatibility parsing** (legacy + structured)
 - **Image handling strategy** (upload URLs + signed storage paths)
 - **Cloudflare Turnstile** bot check on auth
-- **AI chatbot (Tidio Lyro)** trained on curated project knowledge to assist users with navigation help
+- **AI chatbot (Tidio Lyro)** trained on curated project knowledge to assist users with navigation
 
 ---
 
@@ -64,6 +64,7 @@ Venice Local combines local business discovery, ratings/reviews, favorites, owne
 | Maps | Google Maps Embed |
 | Local Server | Python `http.server` |
 | Chatbot | Tidio (Lyro AI Agent) |
+
 
 ---
 
@@ -204,8 +205,6 @@ Venice-Local/
 - Google Maps Embed: location visualization in business detail view
 - TripAdvisor + Yelp: source references for business details
 - DaFont (Font Diner / Copasetic): typography resource attribution
-- Tidio (Lyro AI Agent): AI chatbot used to answer user questions based on curated project knowledge
-
 
 ---
 
@@ -216,8 +215,8 @@ respective businesses and were sourced from publicly available images on Google
 for educational and demonstration purposes only.
 
 Sources include:
-- Google Search (public business listings)
-- Google Maps (public business listings)
+• Google Search (public business listings)
+• Google Maps (public business listings)
 
 No ownership is claimed over these images.
 
