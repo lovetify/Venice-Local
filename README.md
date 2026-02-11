@@ -36,6 +36,7 @@ Venice Local combines local business discovery, ratings/reviews, favorites, owne
 - **Deal format compatibility parsing** (legacy + structured)
 - **Image handling strategy** (upload URLs + signed storage paths)
 - **Cloudflare Turnstile** bot check on auth
+- - **AI chatbot (Tidio Lyro)** trained on curated project knowledge to assist users with navigation help
 
 ---
 
@@ -62,6 +63,7 @@ Venice Local combines local business discovery, ratings/reviews, favorites, owne
 | Security Check | Cloudflare Turnstile |
 | Maps | Google Maps Embed |
 | Local Server | Python `http.server` |
+| Chatbot | Tidio (Lyro AI Agent) |
 
 ---
 
