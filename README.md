@@ -217,6 +217,10 @@ Sources include:
 
 No ownership is claimed over these images.
 
+## Logo Credits
+
+The Venice Local logo was created by Emma Nguyen.
+
 ---
 
 ## Developers
