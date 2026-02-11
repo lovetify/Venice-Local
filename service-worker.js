@@ -10,7 +10,7 @@ const OFFLINE_ASSETS = [
   './manifest.json',
   './assets/venice-local.png',
   './assets/Default_pfp.svg.png',
-  './assets/downtown-venice.webp',
+  './assets/downtown-venice.png',
   './assets/sun.webp',
   './assets/bird.png'
 ];

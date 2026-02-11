@@ -10,7 +10,7 @@ import { buildAvatarPlaceholder, buildMapUrls, calculateAverage, renderRatingChi
 const assetUrl = (file) => new URL(`./assets/${file}`, window.location.href).href;
 const LOGO = assetUrl('venice-local.png');
 const DEFAULT_AVATAR = assetUrl('Default_pfp.svg.png');
-const BACKGROUND_IMAGE = assetUrl('downtown-venice.webp');
+const BACKGROUND_IMAGE = assetUrl('downtown-venice.png');
 const STORAGE_BUCKET = 'business-media';
 const BUSINESS_PHOTO_PLACEHOLDER = BACKGROUND_IMAGE;
 const MAPS_API_KEY = 'AIzaSyCTbisKlbC0BhS0AQsuGW3YvsPSaxf3pGo';
