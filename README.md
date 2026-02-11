@@ -204,6 +204,8 @@ Venice-Local/
 - Google Maps Embed: location visualization in business detail view
 - TripAdvisor + Yelp: source references for business details
 - DaFont (Font Diner / Copasetic): typography resource attribution
+- Tidio (Lyro AI Agent): AI chatbot used to answer user questions based on curated project knowledge
+
 
 ---
 
