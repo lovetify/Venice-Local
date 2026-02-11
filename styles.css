@@ -130,7 +130,7 @@ h1, h2, h3 {
 #auth-screen {
   background:
     linear-gradient(180deg, rgba(10,26,34,0.58), rgba(10,26,34,0.58)),
-    var(--auth-bg-image, url('assets/downtown-venice.png'));
+    var(--auth-bg-image, url('assets/Venice Local main page.png'));
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
