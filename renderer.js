@@ -1,10 +1,11 @@
 // Renderer process logic for Venice Local
 // Now uses Supabase for auth and business storage so data syncs across devices.
 
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient.js';
+import { supabase, SUPABASE_ANON_KEY } from './supabaseClient.js';
 import { parseDeals, serializeDeals } from './modules/deals.js';
 import { buildReportCsv, calculateReportData, renderReportList } from './modules/reports.js';
 import { buildAvatarPlaceholder, buildMapUrls, calculateAverage, renderRatingChip } from './modules/uiUtils.js';
+import { API_BASE_URL } from './apiConfig.js';
 
 // --- Supabase configuration and asset references (updated) ---
 const assetUrl = (file) => new URL(`./assets/${file}`, window.location.href).href;
@@ -111,7 +112,7 @@ function hideLoadingOverlay() {
 
 async function restGet(path) {
   // Use plain fetch to Supabase REST and prefer the signed-in access token for RLS-protected tables.
-  const url = `${SUPABASE_URL}/rest/v1${path}`;
+  const url = `${API_BASE_URL}${path}`;
   const { data } = await supabase.auth.getSession();
   const accessToken = data?.session?.access_token || SUPABASE_ANON_KEY;
   const res = await window.fetch(url, {
