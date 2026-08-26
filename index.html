@@ -5,7 +5,10 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Venice Local</title>
+  <title>Venice Local | Businesses, Events &amp; Things to Do in Venice, FL</title>
+  <meta name="description" content="Discover local businesses, events, and things to do in Venice, Florida. Find your next favorite local spot and live like a local.">
+  <link rel="canonical" href="https://venicelocalfl.com/">
+  <link rel="icon" href="./assets/venice-local.png" type="image/png">
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +37,7 @@
             <span class="sr-only">Venice Local</span>
           </div>
           <h1>Venice Local</h1>
-          <p class="muted">Helping Venice locals discover top-rated businesses and exclusive deals in one place.</p>
+          <p class="muted">Find local businesses. Discover what’s happening. Live like a local.</p>
           <p class="muted">Sign in to review, save favorites, and find deals—or browse as a guest.</p>
         </div>
 
@@ -124,19 +127,24 @@
           <img class="veniceLogo" alt="Venice Local logo">
           <span class="sr-only">Venice Local</span>
         </div>
-        <nav class="nav-actions">
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation">
+          <span aria-hidden="true">☰</span><span class="sr-only">Open navigation menu</span>
+        </button>
+        <nav class="nav-actions" id="primary-navigation" aria-label="Primary navigation">
           <!-- Nav buttons switch visible section via data-target -->
           <button class="nav-btn" data-target="list">All Businesses</button>
+          <button class="nav-btn" data-target="events">Things to Do</button>
           <button class="nav-btn" data-target="deals">Local Deals</button>
           <button class="nav-btn" data-target="reports">Reports</button>
           <button class="nav-btn" data-target="favorites">My Favorites</button>
           <button class="nav-btn owner-only" data-target="owner">Owner Dashboard</button>
           <button class="nav-btn owner-only" data-target="add">Add My Business</button>
+          <button class="nav-btn admin-only" data-target="admin">Admin</button>
           <button class="nav-btn" id="logout-btn">Logout</button>
         </nav>
       </div>
       <div class="profile-actions">
-        <button class="nav-btn" data-target="profile">Profile</button>
+          <button class="nav-btn" data-target="profile">Profile</button>
         <button class="avatar-chip" type="button" data-target="profile">
           <img id="topbar-avatar" alt="Profile avatar">
         </button>
@@ -188,6 +196,48 @@
         </div>
         <div id="business-list" class="card-grid"></div>
         <p id="empty-list" class="empty-text hidden">No businesses found. Be the first to add one!</p>
+      </section>
+
+      <!-- Local events and activities -->
+      <section id="events-section" class="view-section hidden" aria-labelledby="events-heading">
+        <div class="section-header section-header-hero">
+          <p class="eyebrow">Venice, Florida</p>
+          <h1 id="events-heading">Things to Do in Venice</h1>
+          <p class="muted">From markets and live music to school sports, festivals, and performances—find what’s happening around town.</p>
+        </div>
+        <div class="filters card event-filters">
+          <div class="filter-group">
+            <label>Search events
+              <input type="search" id="event-search-input" placeholder="Search events, places, or activities">
+            </label>
+            <label>Category
+              <select id="event-category-filter">
+                <option value="all">All categories</option>
+                <option value="Events">Events</option>
+                <option value="Live Music">Live Music</option>
+                <option value="Arts &amp; Theater">Arts &amp; Theater</option>
+                <option value="Sports">Sports</option>
+                <option value="Festivals">Festivals</option>
+                <option value="Markets">Markets</option>
+                <option value="Community">Community</option>
+                <option value="Family">Family</option>
+                <option value="Food">Food</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label>When
+              <select id="event-time-filter">
+                <option value="upcoming">Upcoming</option>
+                <option value="all">All dates</option>
+                <option value="past">Past events</option>
+              </select>
+            </label>
+          </div>
+          <p id="event-load-error" class="error small" role="alert"></p>
+        </div>
+        <div id="featured-events" class="featured-events hidden" aria-label="Featured events"></div>
+        <div id="events-list" class="card-grid event-grid"></div>
+        <p id="empty-events" class="empty-text hidden">No events match those filters right now. Please check back soon.</p>
       </section>
 
       <!-- Local deals -->
@@ -402,6 +452,48 @@
           <p id="profile-guest-note" class="muted">Sign in or create an account to leave reviews or add businesses.</p>
         </div>
       </section>
+
+      <!-- Event management for authorized administrators only -->
+      <section id="admin-section" class="view-section hidden" aria-labelledby="admin-heading">
+        <div class="section-header">
+          <h2 id="admin-heading">Community Events Admin</h2>
+          <p class="muted">Publish and maintain accurate local event information.</p>
+        </div>
+        <div class="card form-card">
+          <h3 id="event-form-title">Add an Event</h3>
+          <form id="event-form">
+            <div class="form-grid">
+              <label>Event name<input type="text" id="event-name" required maxlength="160"></label>
+              <label>Category
+                <select id="event-category" required>
+                  <option value="Events">Events</option><option value="Live Music">Live Music</option><option value="Arts &amp; Theater">Arts &amp; Theater</option><option value="Sports">Sports</option><option value="Festivals">Festivals</option><option value="Markets">Markets</option><option value="Community">Community</option><option value="Family">Family</option><option value="Food">Food</option><option value="Other">Other</option>
+                </select>
+              </label>
+              <label>Start date &amp; time<input type="datetime-local" id="event-start-at" required></label>
+              <label>End date &amp; time (optional)<input type="datetime-local" id="event-end-at"></label>
+              <label>Location<input type="text" id="event-location" required maxlength="200" placeholder="Venue or address in Venice, FL"></label>
+              <label>Organizer (optional)<input type="text" id="event-organizer" maxlength="160"></label>
+              <label>Price (optional)<input type="text" id="event-price" maxlength="80" placeholder="Free, $15, or ticketed"></label>
+              <label>More information URL (optional)<input type="url" id="event-link" placeholder="https://"></label>
+            </div>
+            <label>Description<textarea id="event-description" rows="4" required maxlength="1200"></textarea></label>
+            <label>Event image (optional)<input type="file" id="event-image-file" accept="image/*"></label>
+            <label>Event image URL (optional)<input type="url" id="event-image-url" placeholder="https://example.com/event.jpg"></label>
+            <label class="checkbox-inline"><input type="checkbox" id="event-featured"> Feature this event</label>
+            <div class="form-actions">
+              <button type="submit" class="primary-btn">Save Event</button>
+              <button type="button" class="ghost-btn hidden" id="cancel-event-edit">Cancel edit</button>
+            </div>
+            <p class="error" id="event-form-error" role="alert"></p>
+            <p class="success" id="event-form-success" role="status"></p>
+          </form>
+        </div>
+        <div class="card admin-event-list-card">
+          <h3>All Events</h3>
+          <div id="admin-events-list" class="admin-event-list"></div>
+          <p id="admin-events-empty" class="empty-text hidden">No events have been added yet.</p>
+        </div>
+      </section>
   </main>
   <footer class="app-footer">
       <p>Venice Local • Built for FBLA Coding & Programming • Made by Emma Nguyen and Koreena Hickey</p>
@@ -413,6 +505,14 @@
     <div class="modal-content">
       <button class="close-btn" id="close-detail">×</button>
       <div id="detail-body"></div> <!-- Populated dynamically from renderer.js -->
+    </div>
+  </div>
+
+  <!-- Event detail modal -->
+  <div id="event-detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="event-detail-title">
+    <div class="modal-content event-detail-content">
+      <button class="close-btn" id="close-event-detail" aria-label="Close event details">×</button>
+      <div id="event-detail-body"></div>
     </div>
   </div>
 

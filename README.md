@@ -24,11 +24,23 @@ Venice Local combines local business discovery, ratings/reviews, favorites, owne
 - **Reviews & Ratings** (1-5 stars, comment, optional photo)
 - **Favorites** save/remove system
 - **Deals** with active/inactive status
+- **Things to Do in Venice** with upcoming/past event filtering, featured events, detail views, and event links
 
 ### Owner Features
 - **Role-based access** (guest/customer/owner)
 - **Owner Dashboard** stats (business count, review count, avg rating, active deals)
 - **Business management** (add/edit/toggle active)
+
+### Admin Event Setup
+
+The public events feed and admin event manager use the additive migration at
+[`supabase/migrations/20260810_add_events.sql`](supabase/migrations/20260810_add_events.sql).
+
+1. Run that file in the Supabase SQL Editor (or your normal migration runner).
+2. Set the trusted administrator's `profiles.role` to `admin` directly in Supabase. The public signup flow intentionally cannot create administrators.
+3. Confirm the existing `business-media` Storage bucket is available. The migration adds an admin-only `events/` folder policy for event-image uploads.
+
+The migration creates only the new `events` table, indexes, event-specific RLS policies, a small admin-check helper, and timestamp trigger. Existing businesses, reviews, favorites, profiles, and storage rows are not changed.
 
 ### Unique / Intelligent Features
 - **Reports page** with app-wide analytics

@@ -23,6 +23,25 @@ let currentUser = null;
 let businesses = [];
 let favorites = {};
 let businessPhotoSupported = false;
+let events = [];
+let eventsSupported = true;
+
+const EVENT_CATEGORIES = ['Events', 'Live Music', 'Arts & Theater', 'Sports', 'Festivals', 'Markets', 'Community', 'Family', 'Food', 'Other'];
+
+function escapeHtml(value = '') {
+  return String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[character]));
+}
+
+function safeExternalUrl(value = '') {
+  try {
+    const url = new URL(value);
+    return ['https:', 'http:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
 
 // -----------------------------
 // Utility helpers
@@ -274,6 +293,69 @@ async function syncBusinessesAndFavorites() {
   if (currentUser?.role === 'owner') renderOwnerDashboard();
 }
 
+function mapEventFromDb(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    location: row.location,
+    organizer: row.organizer || '',
+    priceLabel: row.price_label || '',
+    externalUrl: row.external_url || '',
+    imageUrl: row.image_url || '',
+    isFeatured: row.is_featured === true,
+    isPublished: row.is_published !== false,
+    createdBy: row.created_by
+  };
+}
+
+function mapEventToDb(event) {
+  return {
+    title: event.title,
+    description: event.description,
+    category: event.category,
+    starts_at: event.startsAt,
+    ends_at: event.endsAt || null,
+    location: event.location,
+    organizer: event.organizer || null,
+    price_label: event.priceLabel || null,
+    external_url: event.externalUrl || null,
+    image_url: event.imageUrl || null,
+    is_featured: event.isFeatured === true,
+    created_by: event.createdBy
+  };
+}
+
+function setEventLoadError(message = '') {
+  const el = document.getElementById('event-load-error');
+  if (el) el.textContent = message;
+}
+
+async function fetchEvents() {
+  try {
+    const { data, error } = await supabase.from('events').select('*').order('starts_at', { ascending: true });
+    if (error) throw error;
+    eventsSupported = true;
+    setEventLoadError('');
+    return (data || []).map(mapEventFromDb).filter(Boolean);
+  } catch (error) {
+    eventsSupported = false;
+    console.warn('Event fetch failed.', error?.message || error);
+    setEventLoadError('Events are being set up. Please check back soon.');
+    return [];
+  }
+}
+
+async function syncEvents() {
+  events = await fetchEvents();
+  renderEventsView();
+  if (currentUser?.role === 'admin') renderAdminEvents();
+}
+
 async function checkBusinessPhotoSupport() {
   // Detect if the business_photos table is available for business gallery uploads.
   if (businessPhotoSupported) return true;
@@ -375,6 +457,9 @@ function getTurnstileToken(formId) {
 function setView(target) {
   // View switcher for the whole app.
   // Think of this like changing tabs and doing quick refreshes when needed.
+  if (target === 'admin' && currentUser?.role !== 'admin') {
+    target = 'list';
+  }
   const sections = document.querySelectorAll('.view-section');
   sections.forEach(section => {
     section.classList.add('hidden');
@@ -395,6 +480,11 @@ function setView(target) {
     if (target === 'favorites') renderFavoritesView();
     if (target === 'deals') renderDealsView();
     if (target === 'reports') renderReportsView();
+    if (target === 'events') renderEventsView();
+    if (target === 'admin' && currentUser?.role === 'admin') renderAdminEvents();
+    document.title = target === 'events'
+      ? 'Things to Do in Venice, FL | Venice Local'
+      : 'Venice Local | Businesses, Events & Things to Do in Venice, FL';
   }
 }
 
@@ -481,6 +571,9 @@ function updateRoleVisibility() {
   document.querySelectorAll('.owner-only').forEach(btn => {
     btn.style.display = currentUser && currentUser.role === 'owner' ? 'inline-flex' : 'none';
   });
+  document.querySelectorAll('.admin-only').forEach(btn => {
+    btn.style.display = currentUser && currentUser.role === 'admin' ? 'inline-flex' : 'none';
+  });
   const roleNote = document.getElementById('role-note');
   const authBtn = document.getElementById('logout-btn');
   const profileForm = document.getElementById('profile-photo-form');
@@ -491,6 +584,11 @@ function updateRoleVisibility() {
     if (authBtn) authBtn.textContent = 'Sign In / Create Account';
     if (profileForm) profileForm.classList.add('hidden');
     if (guestNote) guestNote.classList.remove('hidden');
+  } else if (currentUser.role === 'admin') {
+    roleNote.textContent = 'Administrators can manage community events.';
+    if (authBtn) authBtn.textContent = 'Logout';
+    if (profileForm) profileForm.classList.remove('hidden');
+    if (guestNote) guestNote.classList.add('hidden');
   } else if (currentUser.role === 'owner') {
     roleNote.textContent = 'Business Owners can add/edit their businesses and leave reviews.';
     if (authBtn) authBtn.textContent = 'Logout';
@@ -854,6 +952,228 @@ function exportReportCsv() {
 }
 
 // -----------------------------
+// Things to do / community events
+// -----------------------------
+function eventHasEnded(event) {
+  const end = event.endsAt || event.startsAt;
+  return new Date(end).getTime() < Date.now();
+}
+
+function formatEventDateTime(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+  }).format(new Date(value));
+}
+
+function formatEventSchedule(event) {
+  const start = formatEventDateTime(event.startsAt);
+  if (!event.endsAt) return start;
+  const endDate = new Date(event.endsAt);
+  const startDate = new Date(event.startsAt);
+  const sameDay = startDate.toDateString() === endDate.toDateString();
+  const end = sameDay
+    ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(endDate)
+    : formatEventDateTime(event.endsAt);
+  return `${start} – ${end}`;
+}
+
+function buildEventCardMarkup(event, { featured = false } = {}) {
+  const image = safeExternalUrl(event.imageUrl);
+  const past = eventHasEnded(event);
+  const price = event.priceLabel ? `<span class="event-price">${escapeHtml(event.priceLabel)}</span>` : '';
+  return `
+    ${image ? `<div class="event-photo"><img src="${image}" alt="${escapeHtml(event.title)}" loading="lazy"></div>` : ''}
+    <div class="event-card-content">
+      <div class="event-card-meta"><span class="event-category">${escapeHtml(event.category)}</span>${past ? '<span class="event-past">Past</span>' : ''}</div>
+      <h3>${escapeHtml(event.title)}</h3>
+      <p class="event-date">${escapeHtml(formatEventSchedule(event))}</p>
+      <p class="event-location">${escapeHtml(event.location)}</p>
+      <p class="description">${escapeHtml(event.description)}</p>
+      <div class="card-footer"><span>${price}</span><button class="ghost-btn small" data-event-detail="${event.id}">Details</button></div>
+    </div>`;
+}
+
+function renderEventsView() {
+  const list = document.getElementById('events-list');
+  const featuredList = document.getElementById('featured-events');
+  if (!list || !featuredList) return;
+  const query = document.getElementById('event-search-input')?.value.trim().toLowerCase() || '';
+  const category = document.getElementById('event-category-filter')?.value || 'all';
+  const when = document.getElementById('event-time-filter')?.value || 'upcoming';
+  const visibleEvents = events.filter((event) => {
+    if (!event.isPublished) return false;
+    const matchesCategory = category === 'all' || event.category === category;
+    const searchable = `${event.title} ${event.description} ${event.location} ${event.organizer}`.toLowerCase();
+    const matchesQuery = !query || searchable.includes(query);
+    const isPast = eventHasEnded(event);
+    const matchesWhen = when === 'all' || (when === 'past' ? isPast : !isPast);
+    return matchesCategory && matchesQuery && matchesWhen;
+  }).sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+
+  list.innerHTML = '';
+  visibleEvents.forEach((event) => {
+    const card = document.createElement('article');
+    card.className = 'card event-card';
+    card.innerHTML = buildEventCardMarkup(event);
+    list.appendChild(card);
+  });
+  document.getElementById('empty-events')?.classList.toggle('hidden', visibleEvents.length > 0 || !eventsSupported);
+
+  const featured = visibleEvents.filter((event) => event.isFeatured && !eventHasEnded(event)).slice(0, 3);
+  featuredList.innerHTML = featured.length ? `
+    <div class="featured-events-heading"><h2>Featured around Venice</h2></div>
+    <div class="featured-event-grid">${featured.map((event) => `<article class="card event-card featured-event-card">${buildEventCardMarkup(event, { featured: true })}</article>`).join('')}</div>` : '';
+  featuredList.classList.toggle('hidden', !featured.length);
+}
+
+function openEventDetail(eventId) {
+  const event = events.find((item) => item.id === eventId);
+  if (!event) return;
+  const modal = document.getElementById('event-detail-modal');
+  const body = document.getElementById('event-detail-body');
+  if (!modal || !body) return;
+  const image = safeExternalUrl(event.imageUrl);
+  const link = safeExternalUrl(event.externalUrl);
+  body.innerHTML = `
+    ${image ? `<img class="detail-photo" src="${image}" alt="${escapeHtml(event.title)}">` : ''}
+    <p class="eyebrow">${escapeHtml(event.category)}</p>
+    <h2 id="event-detail-title">${escapeHtml(event.title)}</h2>
+    <dl class="event-detail-list">
+      <div><dt>Date & time</dt><dd>${escapeHtml(formatEventSchedule(event))}</dd></div>
+      <div><dt>Location</dt><dd>${escapeHtml(event.location)}</dd></div>
+      ${event.organizer ? `<div><dt>Organizer</dt><dd>${escapeHtml(event.organizer)}</dd></div>` : ''}
+      ${event.priceLabel ? `<div><dt>Price</dt><dd>${escapeHtml(event.priceLabel)}</dd></div>` : ''}
+    </dl>
+    <p class="event-detail-description">${escapeHtml(event.description)}</p>
+    ${link ? `<a class="primary-btn event-link" href="${link}" target="_blank" rel="noopener noreferrer">More event information <span aria-hidden="true">↗</span></a>` : ''}`;
+  modal.classList.remove('hidden');
+}
+
+function closeEventDetail() {
+  document.getElementById('event-detail-modal')?.classList.add('hidden');
+}
+
+function datetimeLocalValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function resetEventForm() {
+  const form = document.getElementById('event-form');
+  if (!form) return;
+  form.reset();
+  delete form.dataset.editing;
+  document.getElementById('event-form-title').textContent = 'Add an Event';
+  document.getElementById('cancel-event-edit').classList.add('hidden');
+  document.getElementById('event-form-error').textContent = '';
+  document.getElementById('event-form-success').textContent = '';
+}
+
+function renderAdminEvents() {
+  if (currentUser?.role !== 'admin') return;
+  const list = document.getElementById('admin-events-list');
+  if (!list) return;
+  list.innerHTML = '';
+  [...events].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt)).forEach((event) => {
+    const row = document.createElement('article');
+    row.className = 'admin-event-row';
+    row.innerHTML = `<div><h4>${escapeHtml(event.title)}</h4><p class="muted small">${escapeHtml(formatEventSchedule(event))} · ${escapeHtml(event.category)}${event.isFeatured ? ' · Featured' : ''}</p></div><div class="actions"><button class="secondary-btn small" data-edit-event="${event.id}">Edit</button><button class="ghost-btn small" data-delete-event="${event.id}">Delete</button></div>`;
+    list.appendChild(row);
+  });
+  document.getElementById('admin-events-empty')?.classList.toggle('hidden', events.length > 0);
+}
+
+function startEditEvent(eventId) {
+  if (currentUser?.role !== 'admin') return;
+  const event = events.find((item) => item.id === eventId);
+  if (!event) return;
+  const form = document.getElementById('event-form');
+  form.dataset.editing = event.id;
+  document.getElementById('event-name').value = event.title;
+  document.getElementById('event-category').value = EVENT_CATEGORIES.includes(event.category) ? event.category : 'Other';
+  document.getElementById('event-start-at').value = datetimeLocalValue(event.startsAt);
+  document.getElementById('event-end-at').value = datetimeLocalValue(event.endsAt);
+  document.getElementById('event-location').value = event.location;
+  document.getElementById('event-organizer').value = event.organizer;
+  document.getElementById('event-price').value = event.priceLabel;
+  document.getElementById('event-link').value = event.externalUrl;
+  document.getElementById('event-image-url').value = event.imageUrl;
+  document.getElementById('event-description').value = event.description;
+  document.getElementById('event-featured').checked = event.isFeatured;
+  document.getElementById('event-form-title').textContent = 'Edit Event';
+  document.getElementById('cancel-event-edit').classList.remove('hidden');
+  document.getElementById('event-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function submitEvent(event) {
+  event.preventDefault();
+  if (currentUser?.role !== 'admin') return;
+  const form = event.target;
+  const errorEl = document.getElementById('event-form-error');
+  const successEl = document.getElementById('event-form-success');
+  const button = form.querySelector('[type="submit"]');
+  errorEl.textContent = '';
+  successEl.textContent = '';
+  const startsAt = document.getElementById('event-start-at').value;
+  const endsAt = document.getElementById('event-end-at').value;
+  if (endsAt && new Date(endsAt) < new Date(startsAt)) {
+    errorEl.textContent = 'The end date must be after the start date.';
+    return;
+  }
+  const externalUrl = document.getElementById('event-link').value.trim();
+  const imageUrl = document.getElementById('event-image-url').value.trim();
+  if ((externalUrl && !safeExternalUrl(externalUrl)) || (imageUrl && !safeExternalUrl(imageUrl))) {
+    errorEl.textContent = 'Use a complete http:// or https:// URL.';
+    return;
+  }
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  try {
+    const imageFile = document.getElementById('event-image-file').files[0];
+    const savedImageUrl = imageFile ? await uploadImage(imageFile, `events/${currentUser.id}`) : imageUrl;
+    const payload = mapEventToDb({
+      title: document.getElementById('event-name').value.trim(),
+      description: document.getElementById('event-description').value.trim(),
+      category: document.getElementById('event-category').value,
+      startsAt: new Date(startsAt).toISOString(), endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+      location: document.getElementById('event-location').value.trim(), organizer: document.getElementById('event-organizer').value.trim(),
+      priceLabel: document.getElementById('event-price').value.trim(), externalUrl, imageUrl: savedImageUrl,
+      isFeatured: document.getElementById('event-featured').checked, createdBy: currentUser.id
+    });
+    const editingId = form.dataset.editing;
+    const { error } = editingId
+      ? await supabase.from('events').update(payload).eq('id', editingId)
+      : await supabase.from('events').insert(payload);
+    if (error) throw error;
+    await syncEvents();
+    resetEventForm();
+    successEl.textContent = editingId ? 'Event updated.' : 'Event published.';
+  } catch (error) {
+    console.error('Event save failed.', error);
+    errorEl.textContent = error?.message || 'Could not save the event. Please try again.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Save Event';
+  }
+}
+
+async function deleteEvent(eventId) {
+  if (currentUser?.role !== 'admin') return;
+  const event = events.find((item) => item.id === eventId);
+  if (!event || !window.confirm(`Delete “${event.title}”? This cannot be undone.`)) return;
+  const { error } = await supabase.from('events').delete().eq('id', eventId);
+  if (error) {
+    alert(error.message || 'Could not delete the event.');
+    return;
+  }
+  await syncEvents();
+  if (document.getElementById('event-form')?.dataset.editing === eventId) resetEventForm();
+}
+
+// -----------------------------
 // Authentication
 // -----------------------------
 function showAuthCard(mode = 'choice') {
@@ -969,6 +1289,7 @@ async function enterApp() {
   renderProfile();
   checkBusinessPhotoSupport();
   syncBusinessesAndFavorites();
+  syncEvents();
   setView('list');
 }
 
@@ -1539,6 +1860,8 @@ function bindNavigationEvents() {
     if (target) {
       btn.addEventListener('click', () => {
         setView(target);
+        document.getElementById('primary-navigation')?.classList.remove('is-open');
+        document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'false');
       });
     }
   });
@@ -1548,6 +1871,42 @@ function bindNavigationEvents() {
     if (target) {
       chip.addEventListener('click', () => setView(target));
     }
+  });
+}
+
+function bindMobileNavigation() {
+  const toggle = document.getElementById('menu-toggle');
+  const navigation = document.getElementById('primary-navigation');
+  if (!toggle || !navigation) return;
+  toggle.addEventListener('click', () => {
+    const isOpen = navigation.classList.toggle('is-open');
+    toggle.setAttribute('aria-expanded', String(isOpen));
+  });
+}
+
+function bindEventEvents() {
+  document.getElementById('event-search-input')?.addEventListener('input', renderEventsView);
+  document.getElementById('event-category-filter')?.addEventListener('change', renderEventsView);
+  document.getElementById('event-time-filter')?.addEventListener('change', renderEventsView);
+  document.getElementById('events-list')?.addEventListener('click', (e) => {
+    const button = e.target.closest('[data-event-detail]');
+    if (button) openEventDetail(button.dataset.eventDetail);
+  });
+  document.getElementById('featured-events')?.addEventListener('click', (e) => {
+    const button = e.target.closest('[data-event-detail]');
+    if (button) openEventDetail(button.dataset.eventDetail);
+  });
+  document.getElementById('event-detail-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'event-detail-modal') closeEventDetail();
+  });
+  document.getElementById('close-event-detail')?.addEventListener('click', closeEventDetail);
+  document.getElementById('event-form')?.addEventListener('submit', submitEvent);
+  document.getElementById('cancel-event-edit')?.addEventListener('click', resetEventForm);
+  document.getElementById('admin-events-list')?.addEventListener('click', (e) => {
+    const edit = e.target.closest('[data-edit-event]');
+    const remove = e.target.closest('[data-delete-event]');
+    if (edit) startEditEvent(edit.dataset.editEvent);
+    if (remove) deleteEvent(remove.dataset.deleteEvent);
   });
 }
 
@@ -1738,11 +2097,13 @@ function bindEvents() {
   // Central event hookup so we keep setup in one spot.
   bindAuthEvents();
   bindNavigationEvents();
+  bindMobileNavigation();
   bindBusinessFilterEvents();
   bindListEvents();
   bindDealsFilterEvents();
   bindReportEvents();
   bindModalEvents();
+  bindEventEvents();
 
   document.getElementById('add-business-form').addEventListener('submit', submitBusiness);
 }
@@ -1775,6 +2136,7 @@ async function initSession() {
     }
     await checkBusinessPhotoSupport();
     await syncBusinessesAndFavorites();
+    await syncEvents();
   } finally {
     hideLoadingOverlay();
   }
