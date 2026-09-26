@@ -1659,6 +1659,8 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   #app-screen .bird {
     display: none;
   }
+}
+
 @media (max-width: 760px) {
   body { overflow-x: clip; }
   .topbar { align-items: flex-start; padding: 10px 14px; gap: 8px; flex-wrap: wrap; }
