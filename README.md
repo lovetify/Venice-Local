@@ -1,6 +1,6 @@
 # Venice Local
 
-![Venice Local logo](assets/Copy%20of%20Venice%20Local.png)
+![Venice Local logo](assets/Venice%20Local%20Logo.png)
 
 Venice Local is our **2025-2026 FBLA Coding & Programming** project. It helps people discover and support small businesses in Downtown Venice, Florida.
 

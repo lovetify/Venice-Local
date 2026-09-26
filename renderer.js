@@ -3,13 +3,12 @@
 
 import { supabase, SUPABASE_ANON_KEY } from './supabaseClient.js';
 import { parseDeals, serializeDeals } from './modules/deals.js';
-import { buildReportCsv, calculateReportData, renderReportList } from './modules/reports.js';
 import { buildAvatarPlaceholder, buildMapUrls, calculateAverage, renderRatingChip } from './modules/uiUtils.js';
 import { API_BASE_URL } from './apiConfig.js';
 
 // --- Supabase configuration and asset references (updated) ---
 const assetUrl = (file) => new URL(`./assets/${file}`, window.location.href).href;
-const LOGO = assetUrl('venice-local.png');
+const LOGO = assetUrl('Venice Local Logo.png');
 const DEFAULT_AVATAR = assetUrl('Default_pfp.svg.png');
 const BACKGROUND_IMAGE = assetUrl('Venice Local main page.png');
 const STORAGE_BUCKET = 'business-media';
@@ -289,7 +288,6 @@ async function syncBusinessesAndFavorites() {
   renderBusinesses();
   renderFavoritesView();
   renderDealsView();
-  renderReportsView();
   if (currentUser?.role === 'owner') renderOwnerDashboard();
 }
 
@@ -479,7 +477,6 @@ function setView(target) {
     if (target === 'owner') renderOwnerDashboard();
     if (target === 'favorites') renderFavoritesView();
     if (target === 'deals') renderDealsView();
-    if (target === 'reports') renderReportsView();
     if (target === 'events') renderEventsView();
     if (target === 'admin' && currentUser?.role === 'admin') renderAdminEvents();
     document.title = target === 'events'
@@ -902,55 +899,6 @@ function renderOwnerDashboard() {
   });
 }
 
-function renderReportsView() {
-  // Render report metrics, category summary, and ranked lists.
-  const generatedEl = document.getElementById('report-generated-at');
-  if (!generatedEl) return;
-  const report = calculateReportData(businesses);
-
-  generatedEl.textContent = `Generated: ${report.generatedAt.toLocaleString()}`;
-  document.getElementById('report-total-businesses').textContent = report.totalBusinesses;
-  document.getElementById('report-active-businesses').textContent = report.totalActiveBusinesses;
-  document.getElementById('report-total-reviews').textContent = report.totalReviews;
-  document.getElementById('report-average-rating').textContent = report.avgRating;
-  document.getElementById('report-active-deals').textContent = report.activeDeals;
-
-  const categoryBody = document.getElementById('report-category-body');
-  if (categoryBody) {
-    categoryBody.innerHTML = report.categoryRows.length
-      ? report.categoryRows.map((row) => `
-        <tr>
-          <td>${row.category}</td>
-          <td>${row.businessCount}</td>
-          <td>${row.reviewCount}</td>
-          <td>${row.avgRating}</td>
-          <td>${row.activeDeals}</td>
-        </tr>
-      `).join('')
-      : '<tr><td colspan="5" class="muted">No data yet.</td></tr>';
-  }
-
-  const topRatedEl = document.getElementById('report-top-rated');
-  if (topRatedEl) topRatedEl.innerHTML = renderReportList(report.topRated);
-  const mostReviewedEl = document.getElementById('report-most-reviewed');
-  if (mostReviewedEl) mostReviewedEl.innerHTML = renderReportList(report.mostReviewed);
-}
-
-function exportReportCsv() {
-  // Download the current report data as a CSV file.
-  const csv = buildReportCsv(businesses);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `venice-local-report-${stamp}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 // -----------------------------
 // Things to do / community events
 // -----------------------------
@@ -1290,7 +1238,7 @@ async function enterApp() {
   checkBusinessPhotoSupport();
   syncBusinessesAndFavorites();
   syncEvents();
-  setView('list');
+  setView('home');
 }
 
 async function logout() {
@@ -2057,11 +2005,6 @@ function bindDealsFilterEvents() {
   if (dealsSearch) dealsSearch.addEventListener('input', renderDealsView);
 }
 
-function bindReportEvents() {
-  const exportBtn = document.getElementById('export-report-csv');
-  if (exportBtn) exportBtn.addEventListener('click', exportReportCsv);
-}
-
 function bindModalEvents() {
   // Handle detail modal close, reviews, and gallery actions.
   document.getElementById('detail-modal').addEventListener('click', (e) => {
@@ -2101,7 +2044,6 @@ function bindEvents() {
   bindBusinessFilterEvents();
   bindListEvents();
   bindDealsFilterEvents();
-  bindReportEvents();
   bindModalEvents();
   bindEventEvents();
 
@@ -2130,6 +2072,7 @@ async function initSession() {
       document.getElementById('app-screen').classList.remove('hidden');
       updateRoleVisibility();
       renderProfile();
+      setView('home');
     } else {
       document.getElementById('auth-screen').classList.remove('hidden');
       document.getElementById('app-screen').classList.add('hidden');

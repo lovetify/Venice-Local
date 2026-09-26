@@ -8,7 +8,7 @@
   <title>Venice Local | Businesses, Events &amp; Things to Do in Venice, FL</title>
   <meta name="description" content="Discover local businesses, events, and things to do in Venice, Florida. Find your next favorite local spot and live like a local.">
   <link rel="canonical" href="https://venicelocalfl.com/">
-  <link rel="icon" href="./assets/venice-local.png" type="image/png">
+  <link rel="icon" href="./assets/Venice%20Local%20Logo.png" type="image/png">
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,6 +29,11 @@
   </div>
   <!-- Authentication flow (signup/signin/guest) -->
   <div id="auth-screen" class="screen">
+    <div class="auth-background-slideshow" aria-hidden="true">
+      <img src="./assets/mainpic1.png" alt="" class="auth-background-slide auth-slide-one">
+      <img src="./assets/mainpic2.png" alt="" class="auth-background-slide auth-slide-two">
+      <img src="./assets/mainpic3.png" alt="" class="auth-background-slide auth-slide-three">
+    </div>
     <div class="auth-container">
       <div class="auth-card">
         <div class="auth-hero">
@@ -36,7 +41,6 @@
             <img class="veniceLogo" alt="Venice Local logo">
             <span class="sr-only">Venice Local</span>
           </div>
-          <h1>Venice Local</h1>
           <p class="muted">Find local businesses. Discover what’s happening. Live like a local.</p>
           <p class="muted">Sign in to review, save favorites, and find deals—or browse as a guest.</p>
         </div>
@@ -132,10 +136,10 @@
         </button>
         <nav class="nav-actions" id="primary-navigation" aria-label="Primary navigation">
           <!-- Nav buttons switch visible section via data-target -->
+          <button class="nav-btn" data-target="home">Home</button>
           <button class="nav-btn" data-target="list">All Businesses</button>
           <button class="nav-btn" data-target="events">Things to Do</button>
           <button class="nav-btn" data-target="deals">Local Deals</button>
-          <button class="nav-btn" data-target="reports">Reports</button>
           <button class="nav-btn" data-target="favorites">My Favorites</button>
           <button class="nav-btn owner-only" data-target="owner">Owner Dashboard</button>
           <button class="nav-btn owner-only" data-target="add">Add My Business</button>
@@ -144,7 +148,7 @@
         </nav>
       </div>
       <div class="profile-actions">
-          <button class="nav-btn" data-target="profile">Profile</button>
+        <button class="nav-btn" data-target="profile">Profile</button>
         <button class="avatar-chip" type="button" data-target="profile">
           <img id="topbar-avatar" alt="Profile avatar">
         </button>
@@ -152,8 +156,46 @@
     </header>
 
     <main class="content">
+      <!-- Welcome page shown after sign-in or guest entry -->
+      <section id="home-section" class="view-section home-view" aria-labelledby="home-heading">
+        <div class="home-hero card">
+          <div class="home-carousel" aria-label="Scenes from Venice, Florida">
+            <img src="./assets/mainpic1.png" alt="A view of Venice, Florida" class="carousel-slide slide-one">
+            <img src="./assets/mainpic2.png" alt="A Venice, Florida street scene" class="carousel-slide slide-two">
+            <img src="./assets/mainpic3.png" alt="A local Venice, Florida destination" class="carousel-slide slide-three">
+          </div>
+          <div class="home-hero-copy">
+            <p class="eyebrow">Welcome to Venice, Florida</p>
+            <h1 id="home-heading">Discover more, right around the corner.</h1>
+            <p>Venice Local makes it easy to find small businesses, local deals, and things to do in the community.</p>
+            <div class="home-cta-row">
+              <button class="primary-btn" type="button" data-target="list">Explore businesses</button>
+              <button class="secondary-btn" type="button" data-target="events">See what’s happening</button>
+            </div>
+          </div>
+        </div>
+
+        <section class="home-about card" aria-labelledby="about-heading">
+          <div>
+            <p class="eyebrow">About us</p>
+            <h2 id="about-heading">Built by locals, for locals.</h2>
+            <p class="muted">Venice Local is built by Venice High School students to celebrate the businesses, events, and special places that make Venice feel like home. We created it to help neighbors discover and support the community around them.</p>
+          </div>
+          <div class="developer-placeholders" aria-label="Venice Local developers">
+            <figure class="developer-placeholder">
+              <img src="./assets/Emma123.JPG" alt="Emma Nguyen, Venice Local developer">
+              <figcaption>Emma Nguyen</figcaption>
+            </figure>
+            <figure class="developer-placeholder">
+              <img src="./assets/Koreena123.png" alt="Koreena Hickey, Venice Local developer">
+              <figcaption>Koreena Hickey</figcaption>
+            </figure>
+          </div>
+        </section>
+      </section>
+
       <!-- Browse all businesses -->
-      <section id="list-section" class="view-section">
+      <section id="list-section" class="view-section hidden">
         <!-- Filters + error state live up top -->
         <div class="filters card">
           <div class="filter-group">
@@ -185,11 +227,10 @@
         <div id="onboarding-strip" class="card onboarding-strip hidden" role="status" aria-live="polite">
           <div class="onboarding-copy">
             <p class="onboarding-title">New to Venice Local?</p>
-            <p class="muted small">Quick start: browse businesses, compare deals, save favorites, and view reports.</p>
+            <p class="muted small">Quick start: browse businesses, compare deals, and save favorites.</p>
             <div class="onboarding-actions">
               <button type="button" class="ghost-btn small" data-onboarding-target="deals">See Deals</button>
               <button type="button" class="ghost-btn small" data-onboarding-target="favorites">My Favorites</button>
-              <button type="button" class="ghost-btn small" data-onboarding-target="reports">View Reports</button>
             </div>
           </div>
           <button type="button" class="ghost-btn small onboarding-close" id="onboarding-close" aria-label="Dismiss onboarding">Dismiss</button>
@@ -272,69 +313,6 @@
         </div>
         <div id="deals-list" class="card-grid"></div>
         <p id="empty-deals" class="empty-text hidden">No deals are live right now.</p>
-      </section>
-
-      <!-- Reports and analytics -->
-      <section id="reports-section" class="view-section hidden">
-        <div class="section-header">
-          <h2>Downtown Venice Reports</h2>
-          <p class="muted">This page shows aggregate, non-sensitive community analytics only.</p>
-        </div>
-        <div class="card reports-toolbar">
-          <p class="muted small" id="report-generated-at">Generated: --</p>
-          <button type="button" class="secondary-btn" id="export-report-csv">Export CSV</button>
-        </div>
-        <div class="dashboard-grid" id="reports-summary-grid">
-          <div class="card stat-card">
-            <p class="muted">Total Businesses</p>
-            <h3 id="report-total-businesses">0</h3>
-          </div>
-          <div class="card stat-card">
-            <p class="muted">Active Businesses</p>
-            <h3 id="report-active-businesses">0</h3>
-          </div>
-          <div class="card stat-card">
-            <p class="muted">Total Reviews</p>
-            <h3 id="report-total-reviews">0</h3>
-          </div>
-          <div class="card stat-card">
-            <p class="muted">Avg Rating</p>
-            <h3 id="report-average-rating">0.0</h3>
-          </div>
-          <div class="card stat-card">
-            <p class="muted">Active Deals</p>
-            <h3 id="report-active-deals">0</h3>
-          </div>
-        </div>
-        <div class="card report-card">
-          <h3>Category Breakdown</h3>
-          <div class="report-table-wrap">
-            <table class="report-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Businesses</th>
-                  <th>Reviews</th>
-                  <th>Avg Rating</th>
-                  <th>Active Deals</th>
-                </tr>
-              </thead>
-              <tbody id="report-category-body">
-                <tr><td colspan="5" class="muted">No data yet.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card-grid">
-          <div class="card report-card">
-            <h3>Top 5 Highest Rated</h3>
-            <ol id="report-top-rated" class="report-list"></ol>
-          </div>
-          <div class="card report-card">
-            <h3>Top 5 Most Reviewed</h3>
-            <ol id="report-most-reviewed" class="report-list"></ol>
-          </div>
-        </div>
       </section>
 
       <!-- Saved favorites -->
@@ -496,7 +474,7 @@
       </section>
   </main>
   <footer class="app-footer">
-      <p>Venice Local • Built for FBLA Coding & Programming • Made by Emma Nguyen and Koreena Hickey</p>
+      <p>Built by Venice High School students Emma Nguyen and Koreena Hickey</p>
   </footer>
   </div>
 
