@@ -660,6 +660,49 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 .home-hero-copy > p:not(.eyebrow) { color: #4d5a57; font-size: 18px; line-height: 1.6; margin: 0; }
 .home-cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
 .home-cta-row .secondary-btn { background: var(--nav); color: #fff; }
+.business-spotlight {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(290px, .95fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #fffaf5;
+}
+.spotlight-photo-main { min-height: 410px; background: var(--nav); }
+.spotlight-photo-main img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.spotlight-copy { padding: 48px 48px 72px; align-self: center; }
+.spotlight-copy h2 { margin: 0 0 14px; color: var(--hero-dark); font-size: clamp(30px, 3.5vw, 44px); line-height: 1.04; }
+.spotlight-sponsored { margin: 0 0 22px; color: #6a7774; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.spotlight-lede { margin: 0 0 12px; color: var(--nav); font-size: 20px; font-weight: 700; line-height: 1.4; }
+.spotlight-copy .muted { margin: 0; font-size: 16px; line-height: 1.6; }
+.spotlight-actions { margin-top: 24px; }
+.spotlight-photo-detail {
+  position: absolute;
+  right: 32px;
+  bottom: 84px;
+  width: 148px;
+  aspect-ratio: 1;
+  margin: 0;
+  overflow: hidden;
+  border: 5px solid #fffaf5;
+  border-radius: 50%;
+  box-shadow: 0 12px 26px rgba(10, 26, 34, .22);
+}
+.spotlight-photo-detail img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.spotlight-promo {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 28px;
+  background: var(--nav);
+  color: #fff;
+}
+.spotlight-promo .eyebrow { margin-bottom: 3px; color: #9ed9d5; }
+.spotlight-promo p:last-child { margin: 0; line-height: 1.4; }
+.spotlight-promo .secondary-btn { flex: 0 0 auto; background: #fffaf5; color: var(--nav); }
 .home-about { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; padding: 34px; }
 .home-about h2 { color: var(--hero-dark); margin: 0 0 10px; font-size: 30px; }
 .home-about .muted { font-size: 17px; line-height: 1.6; }
@@ -1676,6 +1719,11 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
   .home-hero { grid-template-columns: 1fr; }
   .home-carousel { min-height: 260px; }
   .home-hero-copy { padding: 28px 22px; }
+  .business-spotlight { grid-template-columns: 1fr; }
+  .spotlight-photo-main { min-height: 260px; }
+  .spotlight-copy { padding: 30px 22px; }
+  .spotlight-photo-detail { right: 22px; bottom: 146px; width: 112px; border-width: 4px; }
+  .spotlight-promo { padding: 20px 22px; align-items: flex-start; flex-direction: column; }
   .home-about { grid-template-columns: 1fr; padding: 24px; }
   .filters, .card { min-width: 0; }
   .filter-group { grid-template-columns: 1fr; }
