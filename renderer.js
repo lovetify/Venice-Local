@@ -1,4 +1,4 @@
-// Renderer process logic for Venice Local
+nnckjnsckjbscmzxmnbcjdnkneknkbbbdjbdbbmdb mbejhfsdncjbdfkje jndk dkj fskjdf ksjdf skdjbfkj shfweh jhasfk k// Renderer process logic for Venice Local
 // Now uses Supabase for auth and business storage so data syncs across devices.
 
 import { supabase, SUPABASE_ANON_KEY } from './supabaseClient.js';
