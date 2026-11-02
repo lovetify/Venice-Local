@@ -501,7 +501,7 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 .event-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
 .event-card-content { padding: 16px; display: flex; flex-direction: column; gap: 9px; height: 100%; min-width: 0; }
 .event-card h3 { margin: 0; color: var(--hero-dark); font-size: 20px; line-height: 1.25; }
-.event-card .description { margin: 0; line-height: 1.5; }
+.event-card .description { margin: 0; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .event-photo { aspect-ratio: 16 / 8; background: var(--accent-light); overflow: hidden; }
 .event-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .event-card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -519,11 +519,18 @@ button:focus-visible { outline: 2px solid rgba(23, 95, 98, 0.4); outline-offset:
 .event-detail-description { white-space: pre-line; line-height: 1.6; }
 .event-link { display: inline-flex; width: fit-content; margin-top: 8px; text-decoration: none; align-items: center; gap: 6px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.field-hint { display: block; margin-top: 5px; color: #55605d; font-size: 12px; line-height: 1.4; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 .admin-event-list { display: grid; gap: 10px; }
 .admin-event-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid rgba(23, 95, 98, .12); }
 .admin-event-row h4 { margin: 0 0 4px; }
 .admin-event-row p { margin: 0; }
+.admin-event-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.admin-event-title-row h4 { margin: 0; }
+.event-status { display: inline-flex; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.status-published { background: #dff1e4; color: #26683a; }
+.status-draft { background: #f0ece5; color: #6b5b43; }
+.modal-open { overflow: hidden; }
 .modal { z-index: 50; }
 
 .primary-btn { background: var(--primary); }

@@ -1,4 +1,4 @@
-nnckjnsckjbscmzxmnbcjdnkneknkbbbdjbdbbmdb mbejhfsdncjbdfkje jndk dkj fskjdf ksjdf skdjbfkj shfweh jhasfk k// Renderer process logic for Venice Local
+// Renderer process logic for Venice Local
 // Now uses Supabase for auth and business storage so data syncs across devices.
 
 import { supabase, SUPABASE_ANON_KEY } from './supabaseClient.js';
@@ -16,6 +16,9 @@ const BUSINESS_PHOTO_PLACEHOLDER = BACKGROUND_IMAGE;
 const MAPS_API_KEY = 'AIzaSyCTbisKlbC0BhS0AQsuGW3YvsPSaxf3pGo';
 const MAX_GALLERY_PHOTOS = 5;
 const MAX_COUPONS = 5;
+const MAX_EVENT_IMAGE_BYTES = 5 * 1024 * 1024;
+const EVENT_TIME_ZONE = 'America/New_York';
+const DEFAULT_EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
 
 // --- In-memory state for the current session ---
 let currentUser = null;
@@ -24,6 +27,7 @@ let favorites = {};
 let businessPhotoSupported = false;
 let events = [];
 let eventsSupported = true;
+let eventModalReturnFocus = null;
 
 const EVENT_CATEGORIES = ['Events', 'Live Music', 'Arts & Theater', 'Sports', 'Festivals', 'Markets', 'Community', 'Family', 'Food', 'Other'];
 
@@ -40,6 +44,15 @@ function safeExternalUrl(value = '') {
   } catch {
     return '';
   }
+}
+
+function canManageEvents() {
+  return Boolean(currentUser && ['owner', 'admin'].includes(currentUser.role));
+}
+
+function canEditEvent(event) {
+  if (!event || !canManageEvents()) return false;
+  return currentUser.role === 'admin' || event.createdBy === currentUser.id;
 }
 
 // -----------------------------
@@ -324,13 +337,16 @@ function mapEventToDb(event) {
     external_url: event.externalUrl || null,
     image_url: event.imageUrl || null,
     is_featured: event.isFeatured === true,
+    is_published: event.isPublished !== false,
     created_by: event.createdBy
   };
 }
 
-function setEventLoadError(message = '') {
+function setEventLoadError(message = '', managerMessage = message) {
   const el = document.getElementById('event-load-error');
   if (el) el.textContent = message;
+  const managerEl = document.getElementById('event-manager-error');
+  if (managerEl) managerEl.textContent = managerMessage;
 }
 
 async function fetchEvents() {
@@ -343,7 +359,13 @@ async function fetchEvents() {
   } catch (error) {
     eventsSupported = false;
     console.warn('Event fetch failed.', error?.message || error);
-    setEventLoadError('Events are being set up. Please check back soon.');
+    const eventsTableMissing = error?.code === 'PGRST205' || /public\.events|schema cache/i.test(error?.message || '');
+    setEventLoadError(
+      'Events are being set up. Please check back soon.',
+      eventsTableMissing
+        ? 'Event storage is not available yet. Run supabase/migrations/20260810_add_events.sql in the Supabase SQL Editor, then reload this page.'
+        : 'Events could not be loaded. Check the connection and event-table permissions, then try again.'
+    );
     return [];
   }
 }
@@ -351,7 +373,7 @@ async function fetchEvents() {
 async function syncEvents() {
   events = await fetchEvents();
   renderEventsView();
-  if (currentUser?.role === 'admin') renderAdminEvents();
+  if (canManageEvents()) renderManagedEvents();
 }
 
 async function checkBusinessPhotoSupport() {
@@ -455,7 +477,7 @@ function getTurnstileToken(formId) {
 function setView(target) {
   // View switcher for the whole app.
   // Think of this like changing tabs and doing quick refreshes when needed.
-  if (target === 'admin' && currentUser?.role !== 'admin') {
+  if (target === 'manage-events' && !canManageEvents()) {
     target = 'list';
   }
   const sections = document.querySelectorAll('.view-section');
@@ -478,7 +500,7 @@ function setView(target) {
     if (target === 'favorites') renderFavoritesView();
     if (target === 'deals') renderDealsView();
     if (target === 'events') renderEventsView();
-    if (target === 'admin' && currentUser?.role === 'admin') renderAdminEvents();
+    if (target === 'manage-events' && canManageEvents()) renderManagedEvents();
     document.title = target === 'events'
       ? 'Things to Do in Venice, FL | Venice Local'
       : 'Venice Local | Businesses, Events & Things to Do in Venice, FL';
@@ -568,8 +590,8 @@ function updateRoleVisibility() {
   document.querySelectorAll('.owner-only').forEach(btn => {
     btn.style.display = currentUser && currentUser.role === 'owner' ? 'inline-flex' : 'none';
   });
-  document.querySelectorAll('.admin-only').forEach(btn => {
-    btn.style.display = currentUser && currentUser.role === 'admin' ? 'inline-flex' : 'none';
+  document.querySelectorAll('.event-manager-only').forEach(btn => {
+    btn.style.display = canManageEvents() ? 'inline-flex' : 'none';
   });
   const roleNote = document.getElementById('role-note');
   const authBtn = document.getElementById('logout-btn');
@@ -582,12 +604,12 @@ function updateRoleVisibility() {
     if (profileForm) profileForm.classList.add('hidden');
     if (guestNote) guestNote.classList.remove('hidden');
   } else if (currentUser.role === 'admin') {
-    roleNote.textContent = 'Administrators can manage community events.';
+    roleNote.textContent = 'Administrators can manage all community events.';
     if (authBtn) authBtn.textContent = 'Logout';
     if (profileForm) profileForm.classList.remove('hidden');
     if (guestNote) guestNote.classList.add('hidden');
   } else if (currentUser.role === 'owner') {
-    roleNote.textContent = 'Business Owners can add/edit their businesses and leave reviews.';
+    roleNote.textContent = 'Business Owners can manage their businesses, deals, and community events.';
     if (authBtn) authBtn.textContent = 'Logout';
     if (profileForm) profileForm.classList.remove('hidden');
     if (guestNote) guestNote.classList.add('hidden');
@@ -903,14 +925,34 @@ function renderOwnerDashboard() {
 // Things to do / community events
 // -----------------------------
 function eventHasEnded(event) {
-  const end = event.endsAt || event.startsAt;
-  return new Date(end).getTime() < Date.now();
+  const startTime = new Date(event.startsAt).getTime();
+  const endTime = event.endsAt
+    ? new Date(event.endsAt).getTime()
+    : startTime + DEFAULT_EVENT_DURATION_MS;
+  return endTime < Date.now();
 }
 
 function formatEventDateTime(value) {
   if (!value) return '';
   return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
+    timeZone: EVENT_TIME_ZONE,
+    timeZoneName: 'short',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(value));
+}
+
+function eventDateKey(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: EVENT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
   }).format(new Date(value));
 }
 
@@ -919,9 +961,14 @@ function formatEventSchedule(event) {
   if (!event.endsAt) return start;
   const endDate = new Date(event.endsAt);
   const startDate = new Date(event.startsAt);
-  const sameDay = startDate.toDateString() === endDate.toDateString();
+  const sameDay = eventDateKey(startDate) === eventDateKey(endDate);
   const end = sameDay
-    ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(endDate)
+    ? new Intl.DateTimeFormat('en-US', {
+      timeZone: EVENT_TIME_ZONE,
+      timeZoneName: 'short',
+      hour: 'numeric',
+      minute: '2-digit'
+    }).format(endDate)
     : formatEventDateTime(event.endsAt);
   return `${start} – ${end}`;
 }
@@ -957,7 +1004,10 @@ function renderEventsView() {
     const isPast = eventHasEnded(event);
     const matchesWhen = when === 'all' || (when === 'past' ? isPast : !isPast);
     return matchesCategory && matchesQuery && matchesWhen;
-  }).sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  }).sort((a, b) => {
+    const direction = when === 'past' ? -1 : 1;
+    return direction * (new Date(a.startsAt) - new Date(b.startsAt));
+  });
 
   list.innerHTML = '';
   visibleEvents.forEach((event) => {
@@ -995,18 +1045,59 @@ function openEventDetail(eventId) {
     </dl>
     <p class="event-detail-description">${escapeHtml(event.description)}</p>
     ${link ? `<a class="primary-btn event-link" href="${link}" target="_blank" rel="noopener noreferrer">More event information <span aria-hidden="true">↗</span></a>` : ''}`;
+  eventModalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  document.getElementById('close-event-detail')?.focus();
 }
 
 function closeEventDetail() {
-  document.getElementById('event-detail-modal')?.classList.add('hidden');
+  const modal = document.getElementById('event-detail-modal');
+  if (!modal || modal.classList.contains('hidden')) return;
+  modal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  eventModalReturnFocus?.focus();
+  eventModalReturnFocus = null;
 }
 
 function datetimeLocalValue(value) {
   if (!value) return '';
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: EVENT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date(value)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function eventLocalValueToIso(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value || '');
+  if (!match) return '';
+  const [, year, month, day, hour, minute] = match.map(Number);
+  const requestedUtc = Date.UTC(year, month - 1, day, hour, minute);
+  let timestamp = requestedUtc;
+
+  // Convert an Eastern wall-clock value into a real UTC instant without relying
+  // on the editor's device timezone. Repeating handles daylight-saving offsets.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: EVENT_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(new Date(timestamp)).filter((part) => part.type !== 'literal').map((part) => [part.type, Number(part.value)]));
+    const representedUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
+    timestamp += requestedUtc - representedUtc;
+  }
+
+  return new Date(timestamp).toISOString();
 }
 
 function resetEventForm() {
@@ -1020,24 +1111,34 @@ function resetEventForm() {
   document.getElementById('event-form-success').textContent = '';
 }
 
-function renderAdminEvents() {
-  if (currentUser?.role !== 'admin') return;
+function renderManagedEvents() {
+  if (!canManageEvents()) return;
   const list = document.getElementById('admin-events-list');
   if (!list) return;
   list.innerHTML = '';
-  [...events].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt)).forEach((event) => {
+  const managedEvents = events
+    .filter((event) => currentUser.role === 'admin' || event.createdBy === currentUser.id)
+    .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  const heading = document.getElementById('managed-events-heading');
+  if (heading) heading.textContent = currentUser.role === 'admin' ? 'All Events' : 'My Events';
+  managedEvents.forEach((event) => {
     const row = document.createElement('article');
     row.className = 'admin-event-row';
-    row.innerHTML = `<div><h4>${escapeHtml(event.title)}</h4><p class="muted small">${escapeHtml(formatEventSchedule(event))} · ${escapeHtml(event.category)}${event.isFeatured ? ' · Featured' : ''}</p></div><div class="actions"><button class="secondary-btn small" data-edit-event="${event.id}">Edit</button><button class="ghost-btn small" data-delete-event="${event.id}">Delete</button></div>`;
+    const statusClass = event.isPublished ? 'status-published' : 'status-draft';
+    const statusLabel = event.isPublished ? 'Published' : 'Draft';
+    row.innerHTML = `<div><div class="admin-event-title-row"><h4>${escapeHtml(event.title)}</h4><span class="event-status ${statusClass}">${statusLabel}</span></div><p class="muted small">${escapeHtml(formatEventSchedule(event))} · ${escapeHtml(event.category)}${event.isFeatured ? ' · Featured' : ''}</p></div><div class="actions"><button class="secondary-btn small" data-edit-event="${event.id}">Edit</button><button class="ghost-btn small" data-delete-event="${event.id}">Delete</button></div>`;
     list.appendChild(row);
   });
-  document.getElementById('admin-events-empty')?.classList.toggle('hidden', events.length > 0);
+  const empty = document.getElementById('admin-events-empty');
+  if (empty) {
+    empty.textContent = currentUser.role === 'admin' ? 'No events have been added yet.' : 'You have not added any events yet.';
+    empty.classList.toggle('hidden', managedEvents.length > 0);
+  }
 }
 
 function startEditEvent(eventId) {
-  if (currentUser?.role !== 'admin') return;
   const event = events.find((item) => item.id === eventId);
-  if (!event) return;
+  if (!canEditEvent(event)) return;
   const form = document.getElementById('event-form');
   form.dataset.editing = event.id;
   document.getElementById('event-name').value = event.title;
@@ -1051,14 +1152,16 @@ function startEditEvent(eventId) {
   document.getElementById('event-image-url').value = event.imageUrl;
   document.getElementById('event-description').value = event.description;
   document.getElementById('event-featured').checked = event.isFeatured;
+  document.getElementById('event-published').checked = event.isPublished;
   document.getElementById('event-form-title').textContent = 'Edit Event';
   document.getElementById('cancel-event-edit').classList.remove('hidden');
-  document.getElementById('event-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById('event-form').scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
 }
 
 async function submitEvent(event) {
   event.preventDefault();
-  if (currentUser?.role !== 'admin') return;
+  if (!canManageEvents()) return;
   const form = event.target;
   const errorEl = document.getElementById('event-form-error');
   const successEl = document.getElementById('event-form-success');
@@ -1067,7 +1170,13 @@ async function submitEvent(event) {
   successEl.textContent = '';
   const startsAt = document.getElementById('event-start-at').value;
   const endsAt = document.getElementById('event-end-at').value;
-  if (endsAt && new Date(endsAt) < new Date(startsAt)) {
+  const startsAtIso = eventLocalValueToIso(startsAt);
+  const endsAtIso = endsAt ? eventLocalValueToIso(endsAt) : null;
+  if (!startsAtIso || (endsAt && !endsAtIso)) {
+    errorEl.textContent = 'Enter a valid Eastern date and time.';
+    return;
+  }
+  if (endsAtIso && new Date(endsAtIso) < new Date(startsAtIso)) {
     errorEl.textContent = 'The end date must be after the start date.';
     return;
   }
@@ -1077,28 +1186,48 @@ async function submitEvent(event) {
     errorEl.textContent = 'Use a complete http:// or https:// URL.';
     return;
   }
+  const imageFile = document.getElementById('event-image-file').files[0];
+  if (imageFile && !['image/jpeg', 'image/png', 'image/webp'].includes(imageFile.type)) {
+    errorEl.textContent = 'Event images must be JPEG, PNG, or WebP files.';
+    return;
+  }
+  if (imageFile && imageFile.size > MAX_EVENT_IMAGE_BYTES) {
+    errorEl.textContent = 'Event images must be 5 MB or smaller.';
+    return;
+  }
   button.disabled = true;
   button.textContent = 'Saving…';
   try {
-    const imageFile = document.getElementById('event-image-file').files[0];
+    const editingId = form.dataset.editing;
+    const editingEvent = editingId ? events.find((item) => item.id === editingId) : null;
+    if (editingId && !canEditEvent(editingEvent)) throw new Error('You do not have permission to edit this event.');
     const savedImageUrl = imageFile ? await uploadImage(imageFile, `events/${currentUser.id}`) : imageUrl;
     const payload = mapEventToDb({
       title: document.getElementById('event-name').value.trim(),
       description: document.getElementById('event-description').value.trim(),
       category: document.getElementById('event-category').value,
-      startsAt: new Date(startsAt).toISOString(), endsAt: endsAt ? new Date(endsAt).toISOString() : null,
+      startsAt: startsAtIso, endsAt: endsAtIso,
       location: document.getElementById('event-location').value.trim(), organizer: document.getElementById('event-organizer').value.trim(),
       priceLabel: document.getElementById('event-price').value.trim(), externalUrl, imageUrl: savedImageUrl,
-      isFeatured: document.getElementById('event-featured').checked, createdBy: currentUser.id
+      isFeatured: document.getElementById('event-featured').checked,
+      isPublished: document.getElementById('event-published').checked,
+      createdBy: editingEvent?.createdBy || currentUser.id
     });
-    const editingId = form.dataset.editing;
-    const { error } = editingId
-      ? await supabase.from('events').update(payload).eq('id', editingId)
-      : await supabase.from('events').insert(payload);
+    let result;
+    if (editingId) {
+      let updateQuery = supabase.from('events').update(payload).eq('id', editingId);
+      if (currentUser.role !== 'admin') updateQuery = updateQuery.eq('created_by', currentUser.id);
+      result = await updateQuery;
+    } else {
+      result = await supabase.from('events').insert(payload);
+    }
+    const { error } = result;
     if (error) throw error;
     await syncEvents();
     resetEventForm();
-    successEl.textContent = editingId ? 'Event updated.' : 'Event published.';
+    successEl.textContent = editingId
+      ? 'Event updated.'
+      : (payload.is_published ? 'Event published.' : 'Event saved as a draft.');
   } catch (error) {
     console.error('Event save failed.', error);
     errorEl.textContent = error?.message || 'Could not save the event. Please try again.';
@@ -1109,10 +1238,11 @@ async function submitEvent(event) {
 }
 
 async function deleteEvent(eventId) {
-  if (currentUser?.role !== 'admin') return;
   const event = events.find((item) => item.id === eventId);
-  if (!event || !window.confirm(`Delete “${event.title}”? This cannot be undone.`)) return;
-  const { error } = await supabase.from('events').delete().eq('id', eventId);
+  if (!canEditEvent(event) || !window.confirm(`Delete “${event.title}”? This cannot be undone. You can edit it and save it as a draft instead.`)) return;
+  let deleteQuery = supabase.from('events').delete().eq('id', eventId);
+  if (currentUser.role !== 'admin') deleteQuery = deleteQuery.eq('created_by', currentUser.id);
+  const { error } = await deleteQuery;
   if (error) {
     alert(error.message || 'Could not delete the event.');
     return;
@@ -1848,8 +1978,41 @@ function bindEventEvents() {
     if (e.target.id === 'event-detail-modal') closeEventDetail();
   });
   document.getElementById('close-event-detail')?.addEventListener('click', closeEventDetail);
+  document.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('event-detail-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeEventDetail();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = [...modal.querySelectorAll('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+  ['events-list', 'featured-events', 'event-detail-body'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('error', (e) => {
+      if (e.target instanceof HTMLImageElement) e.target.remove();
+    }, true);
+  });
   document.getElementById('event-form')?.addEventListener('submit', submitEvent);
   document.getElementById('cancel-event-edit')?.addEventListener('click', resetEventForm);
+  document.getElementById('event-image-file')?.addEventListener('change', (e) => {
+    if (e.target.files?.length) document.getElementById('event-image-url').value = '';
+  });
+  document.getElementById('event-image-url')?.addEventListener('input', (e) => {
+    if (e.target.value.trim()) document.getElementById('event-image-file').value = '';
+  });
   document.getElementById('admin-events-list')?.addEventListener('click', (e) => {
     const edit = e.target.closest('[data-edit-event]');
     const remove = e.target.closest('[data-delete-event]');

@@ -107,7 +107,7 @@
           <li>Guests can browse listings and deals. Sign in to save favorites, post reviews, and manage your profile.</li>
           <li>Use Search, Category, and Sort to narrow results fast. Open Details for photos, map, hours, reviews, and deals.</li>
           <li>Tap Save on any business to add it to My Favorites. Saved items are tied to your account.</li>
-          <li>Business owners can use Owner Dashboard to add businesses, update info, and toggle deals on or off.</li>
+          <li>Business owners can use Owner Dashboard to add businesses, update info, toggle deals, and publish community events.</li>
           <li>If sign in or sign up does not submit, complete the Turnstile check first and try again.</li>
         </ol>
       </div>
@@ -143,7 +143,7 @@
           <button class="nav-btn" data-target="favorites">My Favorites</button>
           <button class="nav-btn owner-only" data-target="owner">Owner Dashboard</button>
           <button class="nav-btn owner-only" data-target="add">Add My Business</button>
-          <button class="nav-btn admin-only" data-target="admin">Admin</button>
+          <button class="nav-btn event-manager-only" data-target="manage-events">Manage Events</button>
           <button class="nav-btn" id="logout-btn">Logout</button>
         </nav>
       </div>
@@ -457,11 +457,12 @@
         </div>
       </section>
 
-      <!-- Event management for authorized administrators only -->
-      <section id="admin-section" class="view-section hidden" aria-labelledby="admin-heading">
+      <!-- Event management for business owners and site administrators -->
+      <section id="manage-events-section" class="view-section hidden" aria-labelledby="admin-heading">
         <div class="section-header">
-          <h2 id="admin-heading">Community Events Admin</h2>
-          <p class="muted">Publish and maintain accurate local event information.</p>
+          <h2 id="admin-heading">Manage Community Events</h2>
+          <p class="muted">Publish and maintain accurate local event information. Business owners manage their own posts.</p>
+          <p id="event-manager-error" class="error small" role="alert"></p>
         </div>
         <div class="card form-card">
           <h3 id="event-form-title">Add an Event</h3>
@@ -473,17 +474,18 @@
                   <option value="Events">Events</option><option value="Live Music">Live Music</option><option value="Arts &amp; Theater">Arts &amp; Theater</option><option value="Sports">Sports</option><option value="Festivals">Festivals</option><option value="Markets">Markets</option><option value="Community">Community</option><option value="Family">Family</option><option value="Food">Food</option><option value="Other">Other</option>
                 </select>
               </label>
-              <label>Start date &amp; time<input type="datetime-local" id="event-start-at" required></label>
-              <label>End date &amp; time (optional)<input type="datetime-local" id="event-end-at"></label>
+              <label>Start date &amp; time (Eastern)<input type="datetime-local" id="event-start-at" required></label>
+              <label>End date &amp; time (Eastern, optional)<input type="datetime-local" id="event-end-at"></label>
               <label>Location<input type="text" id="event-location" required maxlength="200" placeholder="Venue or address in Venice, FL"></label>
               <label>Organizer (optional)<input type="text" id="event-organizer" maxlength="160"></label>
               <label>Price (optional)<input type="text" id="event-price" maxlength="80" placeholder="Free, $15, or ticketed"></label>
               <label>More information URL (optional)<input type="url" id="event-link" placeholder="https://"></label>
             </div>
             <label>Description<textarea id="event-description" rows="4" required maxlength="1200"></textarea></label>
-            <label>Event image (optional)<input type="file" id="event-image-file" accept="image/*"></label>
+            <label>Event image (optional)<input type="file" id="event-image-file" accept="image/jpeg,image/png,image/webp"><span class="field-hint">JPEG, PNG, or WebP; maximum 5 MB. Uploading a file replaces the image URL.</span></label>
             <label>Event image URL (optional)<input type="url" id="event-image-url" placeholder="https://example.com/event.jpg"></label>
             <label class="checkbox-inline"><input type="checkbox" id="event-featured"> Feature this event</label>
+            <label class="checkbox-inline"><input type="checkbox" id="event-published" checked> Publish this event</label>
             <div class="form-actions">
               <button type="submit" class="primary-btn">Save Event</button>
               <button type="button" class="ghost-btn hidden" id="cancel-event-edit">Cancel edit</button>
@@ -493,9 +495,9 @@
           </form>
         </div>
         <div class="card admin-event-list-card">
-          <h3>All Events</h3>
+          <h3 id="managed-events-heading">My Events</h3>
           <div id="admin-events-list" class="admin-event-list"></div>
-          <p id="admin-events-empty" class="empty-text hidden">No events have been added yet.</p>
+          <p id="admin-events-empty" class="empty-text hidden">You have not added any events yet.</p>
         </div>
       </section>
   </main>
@@ -513,7 +515,7 @@
   </div>
 
   <!-- Event detail modal -->
-  <div id="event-detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="event-detail-title">
+  <div id="event-detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="event-detail-title" tabindex="-1">
     <div class="modal-content event-detail-content">
       <button class="close-btn" id="close-event-detail" aria-label="Close event details">×</button>
       <div id="event-detail-body"></div>

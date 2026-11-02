@@ -30,17 +30,41 @@ Venice Local combines local business discovery, ratings/reviews, favorites, owne
 - **Role-based access** (guest/customer/owner)
 - **Owner Dashboard** stats (business count, review count, avg rating, active deals)
 - **Business management** (add/edit/toggle active)
+- **Event management** (publish and maintain the owner's own community events)
 
-### Admin Event Setup
+### Event Setup (Supabase)
 
-The public events feed and admin event manager use the additive migration at
+The public events feed and owner event manager use the additive migration at
 [`supabase/migrations/20260810_add_events.sql`](supabase/migrations/20260810_add_events.sql).
 
-1. Run that file in the Supabase SQL Editor (or your normal migration runner).
-2. Set the trusted administrator's `profiles.role` to `admin` directly in Supabase. The public signup flow intentionally cannot create administrators.
-3. Confirm the existing `business-media` Storage bucket is available. The migration adds an admin-only `events/` folder policy for event-image uploads.
+1. In the Supabase dashboard, confirm the app's base schema is already installed and includes `public.profiles`.
+2. Open **Storage** and confirm there is a **public** bucket named exactly `business-media`. The app uses public image URLs from this bucket.
+3. Open **SQL Editor**, paste the complete contents of `supabase/migrations/20260810_add_events.sql`, and click **Run**. If an earlier admin-only version was already run, run the updated file again to replace its event and Storage policies.
+4. Create or sign in to an account whose `public.profiles.role` is `owner`. Choosing **Business Owner** during app signup creates that profile role.
 
-The migration creates only the new `events` table, indexes, event-specific RLS policies, a small admin-check helper, and timestamp trigger. Existing businesses, reviews, favorites, profiles, and storage rows are not changed.
+The migration grants guests read access only to published events. Signed-in owners can create events and read, edit, or delete their own events, including unpublished drafts. They cannot change another owner's event. Event-image uploads are limited to `business-media/events/<signed-in-user-id>/` for owners.
+
+A trusted site administrator is optional. The signup form intentionally does not offer this role. To enable it, copy the user's UUID from **Authentication > Users**, then run this directly in the Supabase SQL Editor:
+
+```sql
+update public.profiles
+set role = 'admin'
+where id = '<AUTH-USER-UUID>';
+```
+
+Administrators can manage all event rows and all objects below `business-media/events/`.
+
+### How Business Owners Add Events
+
+1. Sign in with a **Business Owner** account.
+2. Choose **Manage Events** in the main navigation.
+3. Complete the event name, category, start time, location, and description. The end time, organizer, price, information link, and image are optional.
+4. Leave **Publish this event** checked to show it in **Things to Do**, or clear it to save an owner-only draft, then choose **Save Event**.
+5. Use **My Events** on the same page to edit or delete an event. Owners see only their own managed events; a trusted administrator sees all events.
+
+New future-dated, published events appear under **Things to Do** with the default **Upcoming** filter. Use **All dates** or **Past events** when checking an older event.
+
+The migration intentionally inserts **no seed or demo events**, so an empty Things to Do page immediately after setup is expected. The first listing appears after an owner saves a published event. It creates only the event schema, indexes, event-specific RLS policies, role-check helpers, and timestamp trigger; existing businesses, reviews, favorites, profiles, and Storage objects are not changed.
 
 ### Unique / Intelligent Features
 - **Reports page** with app-wide analytics
@@ -160,8 +184,9 @@ http://localhost:4173/
 2. Browse All Businesses, then search/filter/sort.
 3. Open Details to view photos, map, deals, and reviews.
 4. Save favorites and write reviews (non-guest accounts).
-5. If owner, add/edit your business and manage deals.
-6. Open Reports to view analytics and export CSV.
+5. If you are an owner, add/edit your business and manage deals.
+6. Open **Manage Events** to publish or update your community events.
+7. Open **Things to Do** to browse published upcoming and past events.
 
 ---
 
