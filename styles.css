@@ -426,6 +426,7 @@ h1, h2, h3 {
 #signup-form .verification,
 #signup-form button,
 #signup-form p.error,
+#signup-form p.success,
 #signup-form .link-btn {
   grid-column: 1 / -1;
 }

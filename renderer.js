@@ -17,6 +17,9 @@ const MAPS_API_KEY = 'AIzaSyCTbisKlbC0BhS0AQsuGW3YvsPSaxf3pGo';
 const MAX_GALLERY_PHOTOS = 5;
 const MAX_COUPONS = 5;
 const MAX_EVENT_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
+const PROFILE_IMAGE_MAX_DIMENSION = 512;
+const PROFILE_IMAGE_QUALITY = 0.82;
 const EVENT_TIME_ZONE = 'America/New_York';
 const DEFAULT_EVENT_DURATION_MS = 2 * 60 * 60 * 1000;
 
@@ -95,20 +98,21 @@ function mapBusinessToDb(biz) {
   };
 }
 
-async function fetchProfile(userId) {
-  // Load a profile row for the signed-in user.
-  if (!userId) return null;
+async function fetchProfileResult(userId) {
+  // Keep "no row" separate from a network/RLS failure so recovery code never
+  // overwrites an existing profile just because a request was unavailable.
+  if (!userId) return { profile: null, error: null };
   try {
     const data = await restGet(`/profiles?select=id,name,email,role,avatar&id=eq.${userId}&limit=1`);
-    return data?.[0] || null;
+    return { profile: data?.[0] || null, error: null };
   } catch (error) {
     console.warn('Profile fetch failed', error.message);
-    return null;
+    return { profile: null, error };
   }
 }
 
 async function upsertProfile({ id, name, role, avatar, email }) {
-  // Insert or update a profile to keep auth metadata in sync.
+  // Insert or update the signed-in user's application profile row.
   const { error } = await supabase.from('profiles').upsert({
     id,
     name,
@@ -117,6 +121,53 @@ async function upsertProfile({ id, name, role, avatar, email }) {
     email
   });
   if (error) throw error;
+}
+
+async function upsertProfileWithRetry(profile, retries = 2) {
+  // Profile storage is a follow-up to Auth. A temporary profile failure must
+  // never make a successfully created account look like a failed signup.
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      await upsertProfile(profile);
+      return { ok: true, error: null };
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        // Give the newly-created session/profile trigger a moment to settle.
+        await new Promise((resolve) => window.setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+  console.warn('Profile sync failed after account authentication succeeded.', lastError?.message || lastError);
+  return { ok: false, error: lastError };
+}
+
+function selfServiceRole(value) {
+  // Administrators are assigned only through trusted SQL, never user metadata.
+  return value === 'owner' ? 'owner' : 'patron';
+}
+
+function profileFromAuthUser(user) {
+  return {
+    id: user.id,
+    name: user.user_metadata?.name || user.email || 'Venice Local User',
+    email: user.email || '',
+    role: selfServiceRole(user.user_metadata?.role),
+    avatar: authSafeAvatar(user.user_metadata?.avatar) || DEFAULT_AVATAR
+  };
+}
+
+async function fetchOrCreateOwnProfile(user) {
+  const result = await fetchProfileResult(user?.id);
+  if (result.profile || result.error || !user) return result.profile;
+
+  // This repairs confirmed-email accounts (no session during signup) and any
+  // earlier non-fatal profile sync miss. Admin is intentionally not accepted
+  // from editable Auth metadata.
+  const fallback = profileFromAuthUser(user);
+  const saved = await upsertProfileWithRetry(fallback);
+  return saved.ok ? fallback : null;
 }
 
 function setBusinessLoadError(message = '') {
@@ -421,6 +472,105 @@ function readFileAsDataURL(file) {
   });
 }
 
+function validateProfileImageFile(file) {
+  if (!file) return;
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+  if (!allowedTypes.has(file.type)) {
+    throw new Error('Choose a JPG, PNG, WebP, or GIF profile picture.');
+  }
+  if (file.size > MAX_PROFILE_IMAGE_BYTES) {
+    throw new Error('Profile pictures must be 5 MB or smaller.');
+  }
+}
+
+async function resizeProfileImageAsDataURL(file) {
+  // Storage is preferred. This small image fallback keeps the full original
+  // out of Auth/JWT metadata if Storage is temporarily unavailable.
+  const source = await readFileAsDataURL(file);
+  const image = await new Promise((resolve, reject) => {
+    const preview = new Image();
+    preview.onload = () => resolve(preview);
+    preview.onerror = () => reject(new Error('The selected profile picture could not be read.'));
+    preview.src = source;
+  });
+  const largestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  if (!largestSide) throw new Error('The selected profile picture has invalid dimensions.');
+  const scale = Math.min(1, PROFILE_IMAGE_MAX_DIMENSION / largestSide);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('This browser could not prepare the profile picture.');
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', PROFILE_IMAGE_QUALITY);
+}
+
+function isEmbeddedAvatar(value) {
+  return typeof value === 'string' && value.startsWith('data:image/');
+}
+
+function authSafeAvatar(value) {
+  if (!value || isEmbeddedAvatar(value) || value.length > 2048) return '';
+  return safeExternalUrl(value);
+}
+
+async function resolveProfileAvatar({ file, url, userId }) {
+  const directUrl = url ? safeExternalUrl(url) : '';
+  if (url && !directUrl) throw new Error('Enter a valid http:// or https:// profile-picture URL.');
+  if (!file) return directUrl || DEFAULT_AVATAR;
+
+  validateProfileImageFile(file);
+  try {
+    const uploadedUrl = await uploadImage(file, `avatars/${userId}`);
+    if (uploadedUrl) return uploadedUrl;
+  } catch (error) {
+    console.warn('Avatar Storage upload failed; using a compressed profile-only fallback.', error.message);
+  }
+  return resizeProfileImageAsDataURL(file);
+}
+
+async function syncAuthAvatarMetadata(avatar) {
+  // Only a short URL may enter Auth metadata. Embedding image bytes here makes
+  // the session JWT too large for later API request headers.
+  const safeAvatar = authSafeAvatar(avatar);
+  const { data, error } = await supabase.auth.updateUser({
+    data: { avatar: safeAvatar || null }
+  });
+  if (error) throw error;
+  return data?.user || null;
+}
+
+async function removeEmbeddedAuthAvatar(user) {
+  if (!isEmbeddedAvatar(user?.user_metadata?.avatar)) return user;
+
+  // The SQL migration edits auth.users, but an already-open browser can still
+  // hold the old JWT. Refresh uses the refresh token (not that oversized JWT),
+  // so try it before any updateUser request.
+  let candidate = user;
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) throw error;
+    candidate = data?.user || data?.session?.user || candidate;
+    if (!isEmbeddedAvatar(candidate?.user_metadata?.avatar)) return candidate;
+  } catch (error) {
+    console.warn('Could not refresh the legacy avatar session.', error.message);
+  }
+
+  try {
+    const updatedUser = (await syncAuthAvatarMetadata('')) || candidate;
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) throw error;
+    return data?.user || data?.session?.user || updatedUser;
+  } catch (error) {
+    // The SQL cleanup migration handles legacy accounts whose existing JWT is
+    // too large to make updateUser work. After running it, sign in again.
+    console.warn('Could not remove the legacy embedded Auth avatar.', error.message);
+    return candidate;
+  }
+}
+
 async function readFilesAsDataURLs(files = []) {
   const urls = [];
   for (const file of files) {
@@ -472,6 +622,20 @@ function getTurnstileToken(formId) {
   const manualId = formId === 'signin-form' ? 'signin-turnstile-token' : 'turnstile-token';
   const manualField = document.getElementById(manualId);
   return manualField?.value || '';
+}
+
+function resetTurnstile(formId) {
+  // Turnstile tokens are single-use. Clear both our backup field and the
+  // matching widget before the user retries an authentication request.
+  const manualId = formId === 'signin-form' ? 'signin-turnstile-token' : 'turnstile-token';
+  const widgetId = formId === 'signin-form' ? 'signin-turnstile' : 'signup-turnstile';
+  const manualField = document.getElementById(manualId);
+  if (manualField) manualField.value = '';
+  try {
+    window.turnstile?.reset(`#${widgetId}`);
+  } catch (error) {
+    console.warn('Turnstile reset was unavailable.', error.message);
+  }
 }
 
 function setView(target) {
@@ -578,6 +742,17 @@ function extractStoragePath(value) {
   }
 }
 
+async function deleteOwnedAvatarObject(value, userId) {
+  const path = extractStoragePath(value);
+  if (!path || !path.startsWith(`avatars/${userId}/`)) return;
+  try {
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).remove([path]);
+    if (error) throw error;
+  } catch (error) {
+    console.warn('The previous avatar object could not be removed.', error.message);
+  }
+}
+
 async function resolvePhoto({ file, url, folder }) {
   // Decide whether to use an uploaded file or a direct URL.
   if (file) return uploadImage(file, folder);
@@ -669,21 +844,34 @@ async function updateProfilePhoto(event) {
   }
 
   try {
-    const avatar = avatarFile ? await readFileAsDataURL(avatarFile) : avatarUrl;
-    await supabase.auth.updateUser({ data: { avatar } });
-    await upsertProfile({
+    const previousAvatar = currentUser.avatar;
+    const avatar = await resolveProfileAvatar({
+      file: avatarFile,
+      url: avatarUrl,
+      userId: currentUser.id
+    });
+    const profileResult = await upsertProfileWithRetry({
       id: currentUser.id,
       name: currentUser.name,
       role: currentUser.role,
       avatar,
       email: currentUser.email
     });
+    if (!profileResult.ok) throw profileResult.error;
+    try {
+      await syncAuthAvatarMetadata(avatar);
+    } catch (metadataError) {
+      // The database profile is authoritative for display; a metadata mirror
+      // failure should not undo a successfully saved profile picture.
+      console.warn('Auth avatar metadata did not sync.', metadataError.message);
+    }
     currentUser.avatar = avatar;
     renderProfile();
     successEl.textContent = 'Profile photo updated.';
     document.getElementById('profile-photo-form').reset();
+    if (previousAvatar !== avatar) void deleteOwnedAvatarObject(previousAvatar, currentUser.id);
   } catch (err) {
-    errorEl.textContent = 'Could not update photo. Try again.';
+    errorEl.textContent = err.message || 'Could not update photo. Try again.';
   }
 }
 
@@ -1262,15 +1450,23 @@ function showAuthCard(mode = 'choice') {
   [choice, signup, signin].forEach(card => {
     if (card) card.classList.add('hidden');
   });
-  if (mode === 'signup' && signup) signup.classList.remove('hidden');
-  else if (mode === 'signin' && signin) signin.classList.remove('hidden');
-  else if (choice) choice.classList.remove('hidden');
+  if (mode === 'signup' && signup) {
+    signup.classList.remove('hidden');
+    resetTurnstile('signup-form');
+  } else if (mode === 'signin' && signin) {
+    signin.classList.remove('hidden');
+    resetTurnstile('signin-form');
+  } else if (choice) {
+    choice.classList.remove('hidden');
+  }
 }
 
 async function signUp(event) {
   // New account flow.
-  // Grab form values, run quick checks, create auth user, then save profile row.
+  // Auth creation is authoritative; profile/photo sync happens afterward and
+  // can never turn a successfully created account into a "signup failed" UI.
   event.preventDefault();
+  const form = event.currentTarget;
   const name = document.getElementById('signup-name').value.trim();
   const email = document.getElementById('signup-email').value.trim().toLowerCase();
   const password = document.getElementById('signup-password').value.trim();
@@ -1279,17 +1475,39 @@ async function signUp(event) {
   const role = document.getElementById('signup-role').value;
   const turnstileToken = getTurnstileToken('signup-form');
   const errorEl = document.getElementById('signup-error');
+  const successEl = document.getElementById('signup-success');
+  const submitButton = form.querySelector('button[type="submit"]');
   errorEl.textContent = '';
+  if (successEl) successEl.textContent = '';
 
-  if (!name || !email || !password || !role) {
+  if (!name || !email || !password || !['owner', 'patron'].includes(role)) {
     // Quick guard so we don't send half-empty data to Supabase.
-    errorEl.textContent = 'Please fill every field and choose a role.';
+    errorEl.textContent = 'Please fill every field and choose Business Owner or Local Customer.';
     return;
   }
   if (!turnstileToken) {
     errorEl.textContent = 'Please complete the bot check.';
     return;
   }
+  if (avatarUrl && !safeExternalUrl(avatarUrl)) {
+    errorEl.textContent = 'Enter a valid http:// or https:// profile-picture URL.';
+    return;
+  }
+  try {
+    validateProfileImageFile(avatarFile);
+  } catch (validationError) {
+    errorEl.textContent = validationError.message;
+    return;
+  }
+
+  const originalButtonText = submitButton?.textContent || 'Create Account';
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating account…';
+  }
+
+  let signupData = null;
+  const initialAuthAvatar = authSafeAvatar(avatarUrl);
   try {
     // If someone is still logged in somehow, clear that first so this signup is clean.
     const { data: sessionData } = await supabase.auth.getSession();
@@ -1297,28 +1515,101 @@ async function signUp(event) {
       await supabase.auth.signOut();
     }
 
-    const avatar = avatarFile ? await readFileAsDataURL(avatarFile) : (avatarUrl || DEFAULT_AVATAR);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name, role, avatar }
+        // Never put image data here: Auth metadata is copied into the JWT and
+        // a base64 photo makes subsequent Authorization headers too large.
+        data: {
+          name,
+          role,
+          ...(initialAuthAvatar ? { avatar: initialAuthAvatar } : {})
+        },
+        captchaToken: turnstileToken
       }
     });
     if (error) throw error;
-    const authedUser = data.user;
-    await upsertProfile({ id: authedUser.id, name, role, avatar, email });
-    currentUser = {
-      id: authedUser.id,
-      name,
-      email,
-      role,
-      avatar
-    };
-    enterApp();
+    if (!data?.user) throw new Error('The account service did not return a user. Please try again.');
+    signupData = data;
   } catch (err) {
     errorEl.textContent = err.message || 'Sign up failed. Please try again.';
+    resetTurnstile('signup-form');
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonText;
+    }
+    return;
   }
+
+  const authedUser = signupData.user;
+  if (!signupData.session) {
+    if (successEl) {
+      successEl.textContent = avatarFile
+        ? 'Account created. Confirm your email, then sign in and add the uploaded profile picture from Account Settings.'
+        : 'Account created. Check your email if confirmation is required, then sign in.';
+    }
+    form.reset();
+    resetTurnstile('signup-form');
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonText;
+    }
+    return;
+  }
+
+  let avatar = avatarUrl || DEFAULT_AVATAR;
+  if (avatarFile) {
+    try {
+      avatar = await resolveProfileAvatar({ file: avatarFile, url: avatarUrl, userId: authedUser.id });
+    } catch (photoError) {
+      // The account already exists. Continue with a safe fallback instead of
+      // falsely telling the user account creation failed.
+      console.warn('Account created, but the selected profile picture could not be saved.', photoError.message);
+      avatar = avatarUrl || DEFAULT_AVATAR;
+    }
+  }
+
+  try {
+    await syncAuthAvatarMetadata(avatar);
+  } catch (metadataError) {
+    console.warn('Account created, but Auth avatar metadata did not sync.', metadataError.message);
+  }
+
+  const profileResult = await upsertProfileWithRetry({ id: authedUser.id, name, role, avatar, email });
+  currentUser = {
+    id: authedUser.id,
+    name,
+    email,
+    role,
+    avatar
+  };
+
+  try {
+    await enterApp();
+    if (!profileResult.ok) {
+      const roleNote = document.getElementById('role-note');
+      if (roleNote) {
+        roleNote.textContent = 'Your account was created. Profile details are still syncing; sign out and back in if owner tools are unavailable.';
+      }
+    }
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonText;
+    }
+  }
+}
+
+function signInErrorMessage(error) {
+  const message = String(error?.message || '').toLowerCase();
+  if (message.includes('captcha')) return 'The bot check expired or could not be verified. Complete it again.';
+  if (message.includes('email not confirmed')) return 'Confirm your email address, then try signing in again.';
+  if (message.includes('rate') || message.includes('too many')) return 'Too many sign-in attempts. Wait a moment and try again.';
+  if (message.includes('invalid login') || message.includes('invalid credentials')) {
+    return 'Invalid credentials. Please try again or create an account.';
+  }
+  return error?.message || 'Could not sign in. Please try again.';
 }
 
 async function signIn(event) {
@@ -1336,22 +1627,37 @@ async function signIn(event) {
     return;
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  let data;
+  let error;
+  try {
+    const result = await supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken: turnstileToken }
+    });
+    data = result.data;
+    error = result.error;
+  } catch (networkError) {
+    errorEl.textContent = 'Could not reach the account service. Check your connection and try again.';
+    resetTurnstile('signin-form');
+    return;
+  }
   if (error) {
-    errorEl.textContent = 'Invalid credentials. Please try again or create an account.';
+    errorEl.textContent = signInErrorMessage(error);
+    resetTurnstile('signin-form');
     return;
   }
 
-  const authedUser = data.user;
-  const profile = await fetchProfile(authedUser.id);
+  const authedUser = await removeEmbeddedAuthAvatar(data.user);
+  const profile = await fetchOrCreateOwnProfile(authedUser);
   currentUser = {
     id: authedUser.id,
     name: profile?.name || authedUser.user_metadata?.name || authedUser.email,
     email: authedUser.email,
-    role: profile?.role || authedUser.user_metadata?.role || 'patron',
-    avatar: profile?.avatar || authedUser.user_metadata?.avatar || DEFAULT_AVATAR
+    role: profile?.role || selfServiceRole(authedUser.user_metadata?.role),
+    avatar: profile?.avatar || authSafeAvatar(authedUser.user_metadata?.avatar) || DEFAULT_AVATAR
   };
-  enterApp();
+  await enterApp();
 }
 
 function continueAsGuest() {
@@ -1383,9 +1689,13 @@ async function logout() {
   await transitionMainScreens(false);
   document.getElementById('signin-form').reset();
   document.getElementById('signup-form').reset();
+  resetTurnstile('signin-form');
+  resetTurnstile('signup-form');
   const signupError = document.getElementById('signup-error');
   const signinError = document.getElementById('signin-error');
   if (signupError) signupError.textContent = '';
+  const signupSuccess = document.getElementById('signup-success');
+  if (signupSuccess) signupSuccess.textContent = '';
   if (signinError) signinError.textContent = '';
   showAuthCard('choice');
   const profileForm = document.getElementById('profile-photo-form');
@@ -2223,13 +2533,14 @@ async function initSession() {
     const session = data?.session;
     if (session?.user) {
       // User already logged in before: rebuild their local user object fast.
-      const profile = await fetchProfile(session.user.id);
+      const sessionUser = await removeEmbeddedAuthAvatar(session.user);
+      const profile = await fetchOrCreateOwnProfile(sessionUser);
       currentUser = {
-        id: session.user.id,
-        name: profile?.name || session.user.user_metadata?.name || session.user.email,
-        email: session.user.email,
-        role: profile?.role || session.user.user_metadata?.role || 'patron',
-        avatar: profile?.avatar || session.user.user_metadata?.avatar || DEFAULT_AVATAR
+        id: sessionUser.id,
+        name: profile?.name || sessionUser.user_metadata?.name || sessionUser.email,
+        email: sessionUser.email,
+        role: profile?.role || selfServiceRole(sessionUser.user_metadata?.role),
+        avatar: profile?.avatar || authSafeAvatar(sessionUser.user_metadata?.avatar) || DEFAULT_AVATAR
       };
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('app-screen').classList.remove('hidden');

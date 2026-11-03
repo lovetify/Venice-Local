@@ -62,7 +62,10 @@
               <label>Email<input type="email" id="signup-email" required></label>
               <label>Password<input type="password" id="signup-password" required></label>
               <label>Profile Picture (URL)<input type="url" id="signup-avatar" placeholder="https://example.com/photo.jpg"></label>
-            <label>Profile Picture (Upload)<input type="file" id="signup-avatar-file" accept="image/*"></label>
+            <label>Profile Picture (Upload)
+              <input type="file" id="signup-avatar-file" accept="image/jpeg,image/png,image/webp,image/gif">
+              <span class="field-hint">JPG, PNG, WebP, or GIF; 5 MB maximum.</span>
+            </label>
               <label>Role
                 <select id="signup-role" required>
                   <option value="">Select role</option>
@@ -71,11 +74,12 @@
                 </select>
               </label>
             <div class="turnstile-wrapper">
-              <div class="cf-turnstile" data-sitekey="0x4AAAAAACYODhf1mG9Z8s6M" data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"></div>
+              <div id="signup-turnstile" class="cf-turnstile" data-sitekey="0x4AAAAAACYODhf1mG9Z8s6M" data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"></div>
               <input type="hidden" id="turnstile-token">
             </div>
               <button type="submit" class="primary-btn">Create Account</button>
-              <p class="error" id="signup-error"></p>
+              <p class="error" id="signup-error" role="alert"></p>
+              <p class="success" id="signup-success" role="status" aria-live="polite"></p>
               <button type="button" class="link-btn" data-auth-back>← Back to options</button>
             </form>
           </div>
@@ -85,7 +89,7 @@
               <label>Email<input type="email" id="signin-email" required></label>
               <label>Password<input type="password" id="signin-password" required></label>
               <div class="turnstile-wrapper">
-                <div class="cf-turnstile" data-sitekey="0x4AAAAAACYODhf1mG9Z8s6M" data-callback="onTurnstileSignin" data-expired-callback="onTurnstileSigninExpired"></div>
+                <div id="signin-turnstile" class="cf-turnstile" data-sitekey="0x4AAAAAACYODhf1mG9Z8s6M" data-callback="onTurnstileSignin" data-expired-callback="onTurnstileSigninExpired"></div>
                 <input type="hidden" id="signin-turnstile-token">
               </div>
               <button type="submit" class="secondary-btn">Sign In</button>
@@ -448,7 +452,10 @@
           <p><strong>Role:</strong> <span id="profile-role"></span></p>
           <form id="profile-photo-form" class="profile-photo-form">
             <label>Profile Picture (URL)<input type="url" id="profile-avatar-url" placeholder="https://example.com/photo.jpg"></label>
-            <label>Profile Picture (Upload)<input type="file" id="profile-avatar-file" accept="image/*"></label>
+            <label>Profile Picture (Upload)
+              <input type="file" id="profile-avatar-file" accept="image/jpeg,image/png,image/webp,image/gif">
+              <span class="field-hint">JPG, PNG, WebP, or GIF; 5 MB maximum.</span>
+            </label>
             <button type="submit" class="secondary-btn">Update Photo</button>
             <p class="error" id="profile-avatar-error"></p>
             <p class="success" id="profile-avatar-success"></p>
@@ -537,7 +544,7 @@
   <!-- Supabase UMD bundled locally; load before the module script -->
   <script src="assets/vendor/supabase.js"></script>
   <!-- All interactive behavior is in renderer.js -->
-  <script type="module" src="renderer.js"></script>
+  <script type="module" src="renderer.js?v=20261102-avatar-fix"></script>
   <!-- Tidio chatbot -->
   <script src="//code.tidio.co/oybeqwv68c0atjmzfnzykv8qlahr9qde.js" async></script>
   <script>
