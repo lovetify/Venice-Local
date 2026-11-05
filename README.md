@@ -70,6 +70,10 @@ The migration intentionally inserts **no seed or demo events**, so an empty Thin
 
 Confirm `business-media` is a public bucket, then run [`supabase/migrations/20261102_fix_profile_avatar_signup.sql`](supabase/migrations/20261102_fix_profile_avatar_signup.sql) once in the Supabase SQL Editor. It removes legacy base64 profile pictures from Auth metadata (while preserving the copy in `public.profiles`), protects self-service roles from administrator escalation, and adds user-scoped Storage access for `business-media/avatars/<user-id>/`. New uploads use short public URLs; if Storage is temporarily unavailable, the app keeps only a resized profile-row fallback and never embeds image bytes in session tokens. Existing affected users should sign out and back in after the migration so Supabase issues a new, small session token.
 
+### Profile creation timestamps
+
+Run [`supabase/migrations/20261103_add_profile_created_at.sql`](supabase/migrations/20261103_add_profile_created_at.sql) once in the Supabase SQL Editor. It adds `public.profiles.created_at`, backfills existing profiles from their matching Supabase Auth account creation time, and automatically timestamps future profile rows.
+
 ### Unique / Intelligent Features
 - **Reports page** with app-wide analytics
 - **CSV export** for report output
